@@ -1,0 +1,6 @@
+update_octopus_energy_data:
+  description: Update Octopus Energy Data
+  fields:
+    entity_id:
+      description: The entity ID for the sensor to update.
+      example: sensor.afternoon_today_octopus_energy
