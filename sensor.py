@@ -3,7 +3,10 @@ import logging
 from homeassistant.helpers.entity import Entity
 from .octopus_api import get_octopus_energy_rates
 from .const import get_api_key_and_account
+import requests
+from datetime import timedelta
 
+SCAN_INTERVAL = timedelta(seconds=120)  # Set the desired interval
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -37,6 +40,7 @@ class OctopusEnergySensor(Entity):
             rates = await get_octopus_energy_rates(
                 self._api_key, self._account_id, self._sensor_type
             )
+            _LOGGER.info("sensor py logger rates: %s", rates)
             if rates:
                 self._state = "Data Available"
                 self._attributes["rates"] = rates
@@ -56,6 +60,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         OctopusEnergySensor("Afternoon Today", "afternoon_today"),
         OctopusEnergySensor("Afternoon Tomorrow", "afternoon_tomorrow"),
         OctopusEnergySensor("Rates From Midnight", "rates_from_midnight"),
+        OctopusEnergySensor("All Rates", "all_rates"),
     ]
 
     async_add_entities(sensors, True)
