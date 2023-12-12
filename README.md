@@ -22,3 +22,5 @@ But at present it only does the octopus integration.
 
 to install just copy the contents to your custom_components folder, with the folder name battery_automation
 Restart HA and then enter your API key and account number for octopus, this will find your tariff and then show you the rates for you personally. 
+
+Due to the naming convention used within the integration you might not want to use this and Bottlecap Daves sensor. you might lose the sensors unless you rename them. 
