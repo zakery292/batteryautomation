@@ -1,0 +1,15 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Octopus Account Detials",
+                "description": "Enter your API Key and ID below",
+                "data": {
+                    "api_key": "Enter APi Key Here",
+                    "account_id": "Enter Account ID here 1-111111"
+                }
+            }
+        }
+    }
+
+}

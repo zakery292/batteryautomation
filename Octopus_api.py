@@ -1,79 +1,103 @@
-import requests
-import datetime
-from datetime import datetime, timedelta
-from get_tariff import get_tariff  # Import the function, not variables
+import aiohttp
+import asyncio
 import logging
+from datetime import datetime, timedelta
+from .get_tariff import get_tariff
 
 _LOGGER = logging.getLogger(__name__)
 
-# Current time
-current_day = datetime.now()
-# Tomorrow
-tomorrow = current_day + timedelta(days=1)
-agreements_list = []
-i = "-".join(tariff_import)
-c = "-".join(product_code_import)
 
-# Set the API url for rates based upon the data received earlier
-url = f'https://api.octopus.energy/v1/products/{c}/electricity-tariffs/{i}/standard-unit-rates/'
-rates_list = []
+async def get_octopus_energy_rates(api_key, account_id, rate_type):
+    current_day = datetime.now()
+    tomorrow = current_day + timedelta(days=1)
 
-try:
-    response = requests.get(url)
-    response.raise_for_status()  # Raises an HTTPError if the HTTP request returned an unsuccessful status code
-    rates = response.json()['results']
-except Exception as e:
-    _LOGGER.error(f'Error fetching Octopus Energy rates: {e}')
-    print('No rates available')
-    exit()
+    # Retrieve product codes using get_tariff function
+    product_code_import, tariff_import = await get_tariff(api_key, account_id)
 
-for item in rates:
-    value = item['value_inc_vat']
-    valid_from = item['valid_from']
-    valid_till = item['valid_to']
+    if not product_code_import or not tariff_import:
+        _LOGGER.error("Failed to get tariff information.")
+        return []
 
-    # Convert the date time
-    valid_till_dt = datetime.fromisoformat(valid_till)
-    valid_from_dt = datetime.fromisoformat(valid_from)
+    # Assuming product_code_import is a list, join it to create a string
+    i_import = "-".join(product_code_import)
+    _LOGGER.info("import: %s", i_import)
+    c_import = "-".join(tariff_import)
+    _LOGGER.info("product: %s", c_import)
 
-    # Format the date time
-    valid_till_formatted = valid_till_dt.strftime('%d %H:%M:%S')
-    valid_from_formatted = valid_from_dt.strftime('%d %H:%M:%S')
+    # Set the API url for rates based upon the data received earlier
+    async with aiohttp.ClientSession() as session:
+        url_import = f"https://api.octopus.energy/v1/products/{c_import}/electricity-tariffs/{i_import}/standard-unit-rates/"
 
-    # Create a dictionary
-    rates_dict = {'value': value, 'valid_from': valid_from_formatted, 'valid_till': valid_till_formatted}
-    rates_list.append(rates_dict)
+        try:
+            async with session.get(url_import) as response:
+                response.raise_for_status()
+                data = await response.json()
+                rates_import = data["results"]
+                # ... process rates_import ...
+        except Exception as e:
+            _LOGGER.error(f"Error fetching Octopus Energy rates: {e}")
+            return []
+    rates_list = []
 
-# Sort the rates by time
-sorted_rates = sorted(rates_list, key=lambda k: k['valid_from'])
+    try:
+        response = requests.get(url_import)
+        response.raise_for_status()
+        rates_import = response.json()["results"]
 
-rates_from_midnight = [
-    item for item in sorted_rates
-    if (tomorrow.strftime('%d') + ' 00:00:00' <= item['valid_from'] <= tomorrow.strftime('%d') + ' 07:30:00') or
-    (current_day.strftime('%d') + ' 00:00:00' <= item['valid_from'] <= current_day.strftime('%d') + ' 07:30:00')
-]
+        for item in rates_import:
+            value = item["value_inc_vat"]
+            valid_from = item["valid_from"]
+            valid_till = item["valid_to"]
 
-if not rates_from_midnight:
-    _LOGGER.warning('No Rates available')
-else:
-    slots_from_midnight = sorted(rates_from_midnight, key=lambda k: k['valid_from'])
-    print('Rates this from Midnight:\n', slots_from_midnight)
+            valid_till_dt = datetime.fromisoformat(valid_till)
+            valid_from_dt = datetime.fromisoformat(valid_from)
 
-# Afternoon Rates for the Current Day
-afternoon_slots_today = [
-    item for item in sorted_rates
-    if current_day.strftime('%d') + ' 12:00:00' <= item['valid_from'] <= current_day.strftime('%d') + ' 16:00:00'
-]
+            valid_till_formatted = valid_till_dt.strftime("%d %H:%M:%S")
+            valid_from_formatted = valid_from_dt.strftime("%d %H:%M:%S")
 
-# Afternoon Rates for tomorrow
-afternoon_slots_tomorrow = [
-    item for item in sorted_rates
-    if tomorrow.strftime('%d') + ' 12:00:00' <= item['valid_from'] <= tomorrow.strftime('%d') + ' 16:00:00'
-]
+            rates_dict = {
+                "value": value,
+                "valid_from": valid_from_formatted,
+                "valid_till": valid_till_formatted,
+            }
+            rates_list.append(rates_dict)
 
-# Sort afternoon rates by price Current day
-afternoon_rates_today = sorted(afternoon_slots_today, key=lambda k: k['value'])
+        sorted_rates = sorted(rates_list, key=lambda k: k["valid_from"])
 
-# Sort afternoon rates by price tomorrow
-afternoon_rates_tomorrow = sorted(afternoon_slots_tomorrow, key=lambda k: k['value'])
-(print('Afternoon rates for today:\n', afternoon_rates_today))  
+        if rate_type == "rates_from_midnight":
+            return [
+                item
+                for item in sorted_rates
+                if item_meets_condition(
+                    item, "00:00:00", "07:30:00", current_day, tomorrow
+                )
+            ]
+        elif rate_type == "afternoon_today":
+            return [
+                item
+                for item in sorted_rates
+                if item_meets_condition(item, "12:00:00", "16:00:00", current_day)
+            ]
+        elif rate_type == "afternoon_tomorrow":
+            return [
+                item
+                for item in sorted_rates
+                if item_meets_condition(item, "12:00:00", "16:00:00", tomorrow)
+            ]
+        else:
+            _LOGGER.warning("Invalid rate type specified.")
+            return []
+
+    except Exception as e:
+        _LOGGER.error(f"Error fetching Octopus Energy rates: {e}")
+        return []
+
+
+def item_meets_condition(item, start_time, end_time, *days):
+    """Check if the item's valid_from falls within the specified time window on any given day."""
+    return any(
+        day.strftime("%d") + f" {start_time}"
+        <= item["valid_from"]
+        <= day.strftime("%d") + f" {end_time}"
+        for day in days
+    )
