@@ -5,8 +5,9 @@ from .octopus_api import get_octopus_energy_rates
 from .const import get_api_key_and_account
 import requests
 from datetime import timedelta
+from .const import DOMAIN
 
-SCAN_INTERVAL = timedelta(seconds=120)  # Set the desired interval
+SCAN_INTERVAL = timedelta(minutes=30)  # Set the desired interval
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -33,6 +34,30 @@ class OctopusEnergySensor(Entity):
     def extra_state_attributes(self):
         """Return extra state attributes."""
         return self._attributes
+
+    @property
+    def unique_id(self):
+        """Return a unique ID to use for this sensor."""
+        return f"{self._account_id}_{self._sensor_type}"
+
+    @property
+    def device_info(self):
+        """Return information about the device this sensor is part of."""
+        return {
+            "identifiers": {(DOMAIN, self._account_id)},
+            "name": "Octopus Energy",
+            "manufacturer": "Octopus Energy",
+        }
+
+    @property
+    def available(self):
+        """Return True if the sensor is available."""
+        return self._state is not None
+
+    @property
+    def should_poll(self):
+        """Return the polling state."""
+        return True
 
     async def async_update(self):
         """Fetch new state data for the sensor."""
@@ -61,6 +86,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
         OctopusEnergySensor("Afternoon Tomorrow", "afternoon_tomorrow"),
         OctopusEnergySensor("Rates From Midnight", "rates_from_midnight"),
         OctopusEnergySensor("All Rates", "all_rates"),
+        OctopusEnergySensor("Rates Left", "pass"),
+        OctopusEnergySensor("Current Import Rate", "current_import_rate"),
     ]
 
     async_add_entities(sensors, True)

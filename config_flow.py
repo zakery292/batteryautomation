@@ -61,6 +61,7 @@ class BatteryAutomationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required("api_key", default=""): str,
                     vol.Required("account_id", default=""): str,
+                    vol.Optional("battery_sensor", default=""): str,
                 }
             ),
         )

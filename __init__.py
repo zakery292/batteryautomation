@@ -15,6 +15,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     # Retrieve the API key and Account ID from the entry configuration
     api_key = entry.data.get("api_key")
     account_id = entry.data.get("account_id")
+    battery_sensor = entry.data.get("battery_sensor")
 
     # Store them in const.py for global access
     set_api_key_and_account(api_key, account_id)
