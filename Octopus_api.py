@@ -135,6 +135,15 @@ async def get_octopus_energy_rates(api_key, account_id, rate_type):
                 None,
             )
             return [current_rate] if current_rate else []
+        elif rate_type == "rates_left":
+            now = datetime.now()
+            future_rates = [
+                item
+                for item in sorted_by_date
+                if now < datetime.strptime(item["Date"] + " " + item["End Time"], "%d-%m-%Y %H:%M:%S")
+            ]
+            future_rates_sorted = sorted(future_rates, key=lambda x: datetime.strptime(x["Date"] + " " + x["Start Time"], "%d-%m-%Y %H:%M:%S"))
+            return future_rates_sorted
         else:
             _LOGGER.warning("Invalid rate type specified.")
             return []
