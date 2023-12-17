@@ -55,6 +55,8 @@ class BatteryAutomationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             api_key = user_input.get("api_key")
             account_id = user_input.get("account_id")
             battery_charge_rate = user_input.get("battery_charge_rate")
+            _LOGGER.info(f"battery_charge_rate is an integer: {isinstance(battery_charge_rate, int)}")
+
             async with aiohttp.ClientSession() as session:
                 if await validate_api_key(session, api_key, account_id):
                     set_api_key_and_account(api_key, account_id)

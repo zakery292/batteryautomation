@@ -5,6 +5,8 @@ from .octopus_api import get_octopus_energy_rates, rates_data
 from .const import get_api_key_and_account, DOMAIN
 from homeassistant.helpers.event import async_track_time_interval
 from datetime import timedelta
+import asyncio
+import math
 
 SCAN_INTERVAL = timedelta(seconds=120)  # Set the desired interval
 _LOGGER = logging.getLogger(__name__)
@@ -78,21 +80,14 @@ class OctopusEnergySensor(Entity):
 ##### Battery Storage Sensors below #####
 
 class BatteryStorageSensors(Entity):
-    def __init__(self, name, sensor_type, battery_capacity_entity_id):
+    def __init__(self, name, sensor_type):
         self._name = name
         self._sensor_type = sensor_type
-        self._battery_capacity_entity_id = battery_capacity_entity_id
         self._state = None
-        self._update_interval = timedelta(minutes=2)  # Set update interval to 2 minutes
-        self._unavailable_counter = 0  # Counter to track unavailable updates
 
-    async def async_added_to_hass(self):
-        """When entity is added to Home Assistant."""
-        # Schedule regular updates
-        self._update_unsub = async_track_time_interval(
-            self.hass, self.async_update, self._update_interval
-        )
-
+    @property
+    def name(self):
+        return f"{self._name} Battery Sensors"
     @property
     def name(self):
         """Return the name of the sensor."""
@@ -122,48 +117,26 @@ class BatteryStorageSensors(Entity):
         """Return the polling state."""
         return True
 
+
     async def async_update(self):
-        """Fetch new state data for the sensor."""
         try:
-            battery_capacity_state = self.hass.states.get(self._battery_capacity_entity_id)
-            if battery_capacity_state is None or battery_capacity_state.state in ['unknown', 'unavailable']:
+            # Using global variable for battery capacity in kWh
+            battery_capacity_kwh = self.hass.data[DOMAIN]["battery_capacity_kwh"]
+            _LOGGER.info("battery capacity kWh: %s", battery_capacity_kwh)
+            if battery_capacity_kwh is None:
                 self._state = "Unavailable"
             else:
-                try:
-                    battery_capacity_ah = float(battery_capacity_state.state)
-                    self._state = battery_capacity_ah * 50 / 1000  # Convert Ah to kWh
-                except ValueError:
-                    _LOGGER.error("Error converting state to float")
-                    self._state = "Error"
-
-                # Reset counter if data is available
-                if self._state not in [None, 'No Data', 'Error']:
-                    self._unavailable_counter = 0
-                else:
-                    # Increment counter if data is unavailable
-                    self._unavailable_counter += 1
-                    if self._unavailable_counter >= 4:  # e.g., 8 minutes elapsed
-                        # Perform some fallback or recheck logic if needed
-                        pass
-
+                self._state = battery_capacity_kwh
         except Exception as e:
             _LOGGER.error(f"Error updating Battery Capacity: {e}")
             self._state = "Error"
 
-    def __del__(self):
-        """When entity is removed from Home Assistant."""
-        if self._update_unsub:
-            self._update_unsub()
 
 
 ###charge plan sensor ###
 class BatteryChargePlanSensor(Entity):
-    def __init__(self, name, sensor_battery_capacity_kwh, sensor_battery_charge, sensor_battery_charge_rate, rates_data):
+    def __init__(self, name):
         self._name = name
-        self._sensor_battery_capacity_kwh = sensor_battery_capacity_kwh
-        self._sensor_battery_charge = sensor_battery_charge
-        self._sensor_battery_charge_rate = sensor_battery_charge_rate
-        self._rates_data = rates_data  # Pass rates_data as an argument
         self._state = None
         self._attributes = {}
 
@@ -179,77 +152,56 @@ class BatteryChargePlanSensor(Entity):
     def state(self):
         return self._state
 
-async def async_update(self):
-    """Fetch new state data for the sensor."""
-    try:
-        # Access the rates from the rates_data attribute
-        rates_from_midnight = self._rates_data.get("rates_from_midnight", [])
-        if not rates_from_midnight:
-            self._state = "Unavailable"
-            _LOGGER.info("Octopus rates data is unavailable")
-            _LOGGER.info("Rates from midnight battery: %s", rates_from_midnight)
-            return
 
-        # Fetch the states of other required sensors
-        battery_capacity_kwh_state = self.hass.states.get(self._sensor_battery_capacity_kwh)
-        battery_soc_state = self.hass.states.get(self._sensor_battery_charge)
 
-        # Check for 'unknown' or 'None' states and log accordingly
-        if battery_capacity_kwh_state is None or battery_capacity_kwh_state.state in ['unknown', 'unavailable']:
-            _LOGGER.info(f"Battery capacity sensor ({self._sensor_battery_capacity_kwh}) state is unavailable.")
-            self._state = "Unavailable"
-            return
+    async def async_update(self):
+        try:
+            capacity_kwh = self.hass.data[DOMAIN]["battery_capacity_kwh"]
+            soc_percentage = self.hass.data[DOMAIN]["battery_charge_state"]
+            charge_rate_kwh = self.hass.data[DOMAIN]["battery_charge_rate"] / 1000
+            rates_from_midnight = self.hass.data[DOMAIN]["rates_data"].get("rates_from_midnight", [])
 
-        if battery_soc_state is None or battery_soc_state.state in ['unknown', 'unavailable']:
-            _LOGGER.info(f"Battery SOC sensor ({self._sensor_battery_charge}) state is unavailable.")
-            self._state = "Unavailable"
-            return
+            if capacity_kwh is None or soc_percentage is None or charge_rate_kwh is None or not rates_from_midnight:
+                self._state = "Unavailable"
+                return
 
-        # Use charge_rate_state directly if it's a numerical value
-        charge_rate_kwh = self._sensor_battery_charge_rate / 1000  # Convert watts to kWh
+            required_kwh = capacity_kwh * (100 - soc_percentage) / 100
+            _LOGGER.info("required kwh: %s", required_kwh)
+            num_slots = math.ceil(required_kwh / (charge_rate_kwh / 2))  # Each slot is 30 minutes
 
-        capacity_kwh = float(battery_capacity_kwh_state.state)
-        soc_percentage = float(battery_soc_state.state)
+            # Sort rates by cost and pick the required number of cheapest slots
+            sorted_rates = sorted(rates_from_midnight, key=lambda x: float(x['Cost'].rstrip('p')))
+            cheapest_slots = sorted_rates[:num_slots]
 
-        required_kwh = capacity_kwh * (100 - soc_percentage) / 100
+            # Sort the selected slots by their start time
+            sorted_cheapest_slots = sorted(cheapest_slots, key=lambda x: x['Start Time'])
 
-        # Sort the rates by cost
-        sorted_rates = sorted(rates_from_midnight, key=lambda x: float(x['Cost']))
+            # Calculate total cost and get the start times of sorted slots
+            total_cost = sum(float(slot['Cost'].rstrip('p')) * (charge_rate_kwh / 2) for slot in sorted_cheapest_slots)
+            slot_times = [slot['Start Time'] for slot in sorted_cheapest_slots]
 
-        # Calculate the charging slots
-        slots, total_cost = self.calculate_charge_slots(required_kwh, charge_rate_kwh, sorted_rates)
+            self._state = "Calculated"
+            self._attributes = {
+                'required_slots': num_slots,
+                'total_cost': f"{total_cost:.2f}p",
+                'slot_times': slot_times
+            }
+        except Exception as e:
+            _LOGGER.error(f"Error in BatteryChargePlanSensor update: {e}")
+            self._state = "Error"
 
-        # Update sensor state and attributes
-        self._state = "Calculated"
-        self._attributes['charging_slots'] = slots
-        self._attributes['total_cost'] = total_cost
+    @property
+    def extra_state_attributes(self):
+        """Return extra state attributes."""
+        return self._attributes
 
-    except Exception as e:
-        _LOGGER.error(f"Error updating Battery Charge Plan: {e}")
-        self._state = "Error"
-
-    def calculate_charge_slots(self, required_kwh, charge_rate_kwh, sorted_rates):
-        slots = []
-        remaining_kwh = required_kwh
-
-        for rate in sorted_rates:
-            if remaining_kwh <= 0:
-                break
-
-            slot_kwh = min(charge_rate_kwh / 2, remaining_kwh)  # Calculate kWh for a 30 min slot
-            slot_cost = slot_kwh * float(rate['Cost'])
-            slots.append({'time': rate['Start Time'], 'kwh': slot_kwh, 'cost': slot_cost})
-
-            remaining_kwh -= slot_kwh
-
-        return slots
-
+    @property
+    def extra_state_attributes(self):
+        """Return extra state attributes."""
+        return self._attributes
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Setup sensor platform."""
-    battery_capacity_entity_id = entry.data.get("battery_capacity")
-    battery_charge_entity_id = entry.data.get("battery_charge")
-    battery_charge_rate_entity_id = entry.data.get("battery_charge_rate")
     sensors = [
         OctopusEnergySensor("Afternoon Today", "afternoon_today"),
         OctopusEnergySensor("Afternoon Tomorrow", "afternoon_tomorrow"),
@@ -257,15 +209,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         OctopusEnergySensor("All Rates", "all_rates"),
         OctopusEnergySensor("Rates Left", "rates_left"),
         OctopusEnergySensor("Current Import Rate", "current_import_rate"),
-        BatteryStorageSensors(
-            "Battery Kwh", "battery_capacity_kwh", battery_capacity_entity_id
-        ),
-        BatteryChargePlanSensor(
-            "Battery Charge Plan",
-            battery_capacity_entity_id,
-            battery_charge_entity_id,
-            battery_charge_rate_entity_id,
-            rates_data
-        )
+        BatteryStorageSensors("Battery Kwh", "battery_capacity_kwh"),
+        BatteryChargePlanSensor("Battery Charge Plan")
     ]
     async_add_entities(sensors, True)
