@@ -13,12 +13,13 @@ All the sensors have the dates stripped out of them to make them more usable in 
 - End time
 With this you should be able to pick just the part you need ie the date and in standard times not iso or z as the octopus api gives out. this means scripts should work with the times given
 
-Eventually this intergration will ask for the battery entity, AC charage times (start and end) for automated charging overnight using the cheapest slots. if your inverter supports force discharging then this will also be able to automate discharge based on the best rates
-for the day. 
+The integration now asks for optional inputs for battery charge state, battery capacity ah state, battery charge start and end times
+Currently the integration will calculate the actual kwh of the batteries based on a 50v system but this can be amended to include a range of voltages 
+The charging logic is a work in progress the sensor is there but the charge plan from midnight doesnt calculate currently.
 
 The further aim is to get the integration to look at the last 7 days usage create a averge between certain times and ensure capacity during peak usage times almost like AI but im not that cleaver! 
 
-But at present it only does the octopus integration. 
+The octopus integration has been moved from local api calls for each sensor to one global dictionary this means the data will be easily accessable for all future addons.
 
 to install just copy the contents to your custom_components folder, with the folder name battery_automation
 Restart HA and then enter your API key and account number for octopus, this will find your tariff and then show you the rates for you personally. 
