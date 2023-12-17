@@ -14,7 +14,7 @@ async def get_tariff(api_key, account_id):
     try:
         # Get API key and account ID from global constants
         api_key, account_id = get_api_key_and_account()
-        _LOGGER.info("API key for get_tariff call: %s", api_key)
+        # _LOGGER.info("API key for get_tariff call: %s", api_key)
         url = f"https://api.octopus.energy/v1/accounts/{account_id}/"
 
         # Use asyncio.to_thread to perform the blocking call in a separate thread
@@ -52,7 +52,7 @@ async def get_tariff(api_key, account_id):
             for item in agreements_list
             if item["valid_to"] is None and not item["is_export"]
         ]
-        _LOGGER.info("get tariff logger import: %s", tariff_import)
+        # _LOGGER.info("get tariff logger import: %s", tariff_import)
         if not tariff_import:
             _LOGGER.warning("No import tariff available.")
             return None, None
@@ -61,8 +61,8 @@ async def get_tariff(api_key, account_id):
             "-".join(tariff.split("-")[2:-1]) for tariff in tariff_import
         ]
 
-        _LOGGER.debug("tariff_import: %s", tariff_import)
-        _LOGGER.debug("product_code_import: %s", product_code_import)
+        # _LOGGER.debug("tariff_import: %s", tariff_import)
+        # _LOGGER.debug("product_code_import: %s", product_code_import)
 
         # Return only the import tariffs and their product codes
         return tariff_import, product_code_import
