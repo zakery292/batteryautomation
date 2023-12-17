@@ -15,11 +15,15 @@ With this you should be able to pick just the part you need ie the date and in s
 
 The integration now asks for optional inputs for battery charge state, battery capacity ah state, battery charge start and end times
 Currently the integration will calculate the actual kwh of the batteries based on a 50v system but this can be amended to include a range of voltages 
-The charging logic is a work in progress the sensor is there but the charge plan from midnight doesnt calculate currently.
+
+Can and will now create a dynamic charge plan updated every 30 mins based upon battery level, will select slots and produce a plan in time order to charge with a estimated cost based upon your charge rate. 
+
+Next steps are to get this to be sent to the inverter
 
 The further aim is to get the integration to look at the last 7 days usage create a averge between certain times and ensure capacity during peak usage times almost like AI but im not that cleaver! 
 
-The octopus integration has been moved from local api calls for each sensor to one global dictionary this means the data will be easily accessable for all future addons.
+The octopus integration has been moved from local api calls for each sensor to one global dictionary this means the data will be easily accessable for all future addons. 
+Ah to kWh has now been moved from the sensor file to the __init__ file in order to creat a global variable that we can access for other logic
 
 to install just copy the contents to your custom_components folder, with the folder name battery_automation
 Restart HA and then enter your API key and account number for octopus, this will find your tariff and then show you the rates for you personally. 
