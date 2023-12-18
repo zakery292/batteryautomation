@@ -1,14 +1,26 @@
 """The Battery Automation integration."""
+# __init__.py
 import logging
 import asyncio
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from .const import set_api_key_and_account, get_api_key_and_account, DOMAIN
+from .const import DOMAIN, set_api_key_and_account
 from .octopus_api import get_octopus_energy_rates
 from .get_tariff import get_tariff
+from .charging_control import ChargingControl
+from .sensor import BatteryChargePlanSensor
+from .switch import ChargingControlSwitchEntity
 
 _LOGGER = logging.getLogger(__name__)
+
+def set_charging_control_enabled(hass: HomeAssistant, value: bool):
+    """Set the state of the charging control."""
+    hass.data[DOMAIN]["charging_control_enabled"] = value
+
+def get_charging_control_enabled(hass: HomeAssistant) -> bool:
+    """Get the state of the charging control."""
+    return hass.data[DOMAIN].get("charging_control_enabled", False)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     # Retrieve the API key, Account ID, and other config data
@@ -20,7 +32,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     # Initialize domain data if not already done
     if DOMAIN not in hass.data:
-        hass.data[DOMAIN] = {}
+        hass.data[DOMAIN] = {"charging_control_enabled": False}
 
     # Store API key and Account ID for global access
     set_api_key_and_account(api_key, account_id)
@@ -44,18 +56,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     # Store rates data
     hass.data[DOMAIN]["rates_data"] = rates_data
-    #_LOGGER.info("rates_data: %s", rates_data)
-
 
     # Wait for valid states of battery charge and capacity entities
     await wait_for_valid_state(hass, battery_charge_entity_id)
     await wait_for_valid_state(hass, battery_capacity_entity_id)
 
-    # Wait for valid states of battery charge and capacity entities
-    await wait_for_valid_state(hass, battery_charge_entity_id)
-    await wait_for_valid_state(hass, battery_capacity_entity_id)
-
-    # Store these states in global variables for sensor access
+    # Store states in global variables for sensor access
     battery_charge_state = float(hass.states.get(battery_charge_entity_id).state)
     battery_capacity_ah = float(hass.states.get(battery_capacity_entity_id).state)
 
@@ -64,18 +70,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     hass.data[DOMAIN]["battery_charge_state"] = battery_charge_state
     hass.data[DOMAIN]["battery_charge_rate"] = battery_charge_rate
 
-    _LOGGER.info("Stored battery charge state in hass.data[DOMAIN]: %s", battery_charge_state)
-    _LOGGER.info("Stored battery capacity state in hass.data[DOMAIN]: %s kWh", hass.data[DOMAIN]["battery_capacity_kwh"])
-    _LOGGER.info("Stored battery charge rate in hass.data[DOMAIN]: %s", hass.data[DOMAIN]["battery_charge_rate"])
+    charging_entity_start = entry.data.get("charge_start")
+    charging_entity_end = entry.data.get("charge_end")
+    hass.data[DOMAIN]["charging_control"] = ChargingControl(hass, charging_entity_start, charging_entity_end)
 
 
-
-
-
-    # Forward to sensor setup
+    # Forward to sensor and switch setup
     hass.async_create_task(
         hass.config_entries.async_forward_entry_setup(entry, Platform.SENSOR)
     )
+    hass.async_create_task(
+        hass.config_entries.async_forward_entry_setup(entry, Platform.SWITCH)
+    )
+
     return True
 
 async def wait_for_valid_state(hass, entity_id):
@@ -89,3 +96,5 @@ async def wait_for_valid_state(hass, entity_id):
             except ValueError:
                 pass
         await asyncio.sleep(10)
+
+# ... other necessary functions and classes ...

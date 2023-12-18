@@ -1,14 +1,18 @@
 """Define sensors for Battery Automation."""
+# sensor.py
 import logging
 from homeassistant.helpers.entity import Entity
 from .octopus_api import get_octopus_energy_rates, rates_data
-from .const import get_api_key_and_account, DOMAIN
+from .const import (get_api_key_and_account, DOMAIN, unique_id_charge_plan_sensor, unique_id_battery_sensor)
 from homeassistant.helpers.event import async_track_time_interval
 from datetime import timedelta
 import asyncio
 import math
+from .charging_control import ChargingControl
 
-SCAN_INTERVAL = timedelta(seconds=120)  # Set the desired interval
+
+
+SCAN_INTERVAL = timedelta(minutes=30)  # Set the desired interval
 _LOGGER = logging.getLogger(__name__)
 
 #### Octopus Rates below #####
@@ -50,6 +54,10 @@ class OctopusEnergySensor(Entity):
             "name": "Octopus Energy",
             "manufacturer": "Zakery292",
         }
+    @property
+    def icon(self):
+        """Icon to use in the frontend, if any."""
+        return "mdi:flash"
 
     @property
     def available(self):
@@ -87,11 +95,8 @@ class BatteryStorageSensors(Entity):
 
     @property
     def name(self):
-        return f"{self._name} Battery Sensors"
-    @property
-    def name(self):
         """Return the name of the sensor."""
-        return f"{self._name} Battery Sensors"
+        return f"{self._name} Sensor"
 
     @property
     def state(self):
@@ -101,14 +106,14 @@ class BatteryStorageSensors(Entity):
     @property
     def unique_id(self):
         """Return a unique ID to use for this sensor."""
-        return f"{self._name}_{self._sensor_type}"
+        return f"{unique_id_battery_sensor}_{self._name}_{self._sensor_type}"
 
     @property
     def device_info(self):
         """Return information about the device this sensor is part of."""
         return {
-            "identifiers": {(DOMAIN,)},
-            "name": "Battery Storage Sensors",
+            "identifiers": {(DOMAIN, "battery_storage_sensors")},
+            "name": "Battery Storage Automation",
             "manufacturer": "Zakery292",
         }
 
@@ -116,7 +121,6 @@ class BatteryStorageSensors(Entity):
     def should_poll(self):
         """Return the polling state."""
         return True
-
 
     async def async_update(self):
         try:
@@ -131,8 +135,6 @@ class BatteryStorageSensors(Entity):
             _LOGGER.error(f"Error updating Battery Capacity: {e}")
             self._state = "Error"
 
-
-
 ###charge plan sensor ###
 class BatteryChargePlanSensor(Entity):
     def __init__(self, name):
@@ -145,55 +147,73 @@ class BatteryChargePlanSensor(Entity):
         return f"{self._name} Charge Plan"
 
     @property
-    def unique_id(self):
-        return f"{self._name}_charge_plan"
-
-    @property
     def state(self):
         return self._state
+    @property
+    def icon(self):
+        """Icon to use in the frontend, if any."""
+        return "mdi:battery-charging"
+    @property
+    def device_info(self):
+        """Return information about the device this sensor is part of."""
+        return {
+            "identifiers": {(DOMAIN, "battery_storage_sensors")},
+            "name": "Battery Storage Automation",
+            "manufacturer": "Zakery292",
+        }
+    @property
+    def unique_id(self):
+        """Return a unique ID to use for this sensor."""
+        # Ensure a unique ID across different sensors
+        return f"{unique_id_charge_plan_sensor}_{self._name}"
+
 
 
 
     async def async_update(self):
-        try:
-            capacity_kwh = self.hass.data[DOMAIN]["battery_capacity_kwh"]
-            soc_percentage = self.hass.data[DOMAIN]["battery_charge_state"]
-            charge_rate_kwh = self.hass.data[DOMAIN]["battery_charge_rate"] / 1000
-            rates_from_midnight = self.hass.data[DOMAIN]["rates_data"].get("rates_from_midnight", [])
+        # Check if the charging control is enabled
+        if not self.hass.data[DOMAIN].get("charging_control_enabled", False):
+            _LOGGER.info("Charging control is not enabled. Charge plan is waiting.")
+            self._state = "Waiting"
+            self._attributes = {}
+            return
+        else:
+            try:
+                # Validate required data
+                capacity_kwh = self.hass.data[DOMAIN].get("battery_capacity_kwh")
+                soc_percentage = self.hass.data[DOMAIN].get("battery_charge_state")
+                charge_rate_kwh = self.hass.data[DOMAIN].get("battery_charge_rate") / 1000
+                rates_from_midnight = self.hass.data[DOMAIN]["rates_data"].get("rates_from_midnight", [])
 
-            if capacity_kwh is None or soc_percentage is None or charge_rate_kwh is None or not rates_from_midnight:
-                self._state = "Unavailable"
-                return
+                if not all([capacity_kwh, soc_percentage, charge_rate_kwh, rates_from_midnight]):
+                    _LOGGER.error("One or more required data elements are missing or invalid.")
+                    self._state = "Unavailable"
+                    return
 
-            required_kwh = capacity_kwh * (100 - soc_percentage) / 100
-            _LOGGER.info("required kwh: %s", required_kwh)
-            num_slots = math.ceil(required_kwh / (charge_rate_kwh / 2))  # Each slot is 30 minutes
+                required_kwh = capacity_kwh * (100 - soc_percentage) / 100
+                _LOGGER.info("Required kWh: %s", required_kwh)
+                num_slots = math.ceil(required_kwh / (charge_rate_kwh / 2))
 
-            # Sort rates by cost and pick the required number of cheapest slots
-            sorted_rates = sorted(rates_from_midnight, key=lambda x: float(x['Cost'].rstrip('p')))
-            cheapest_slots = sorted_rates[:num_slots]
+                sorted_rates = sorted(rates_from_midnight, key=lambda x: float(x['Cost'].rstrip('p')))
+                cheapest_slots = sorted_rates[:num_slots]
 
-            # Sort the selected slots by their start time
-            sorted_cheapest_slots = sorted(cheapest_slots, key=lambda x: x['Start Time'])
+                sorted_cheapest_slots = sorted(cheapest_slots, key=lambda x: x['Start Time'])
 
-            # Calculate total cost and get the start times of sorted slots
-            total_cost = sum(float(slot['Cost'].rstrip('p')) * (charge_rate_kwh / 2) for slot in sorted_cheapest_slots)
-            slot_times = [slot['Start Time'] for slot in sorted_cheapest_slots]
+                total_cost = sum(float(slot['Cost'].rstrip('p')) * (charge_rate_kwh / 2) for slot in sorted_cheapest_slots)
+                slot_times = [slot['Start Time'] for slot in sorted_cheapest_slots]
 
-            self._state = "Calculated"
-            self._attributes = {
-                'required_slots': num_slots,
-                'total_cost': f"{total_cost:.2f}p",
-                'slot_times': slot_times
-            }
-        except Exception as e:
-            _LOGGER.error(f"Error in BatteryChargePlanSensor update: {e}")
-            self._state = "Error"
-
-    @property
-    def extra_state_attributes(self):
-        """Return extra state attributes."""
-        return self._attributes
+                self._state = "Calculated"
+                self._attributes = {
+                    'required_slots': num_slots,
+                    'total_cost': f"{total_cost:.2f}p",
+                    'slot_times': slot_times
+                }
+                # Update the slot_times in global domain data
+                self.hass.data[DOMAIN]["slot_times"] = slot_times
+                self.async_write_ha_state()
+            except Exception as e:
+                _LOGGER.error(f"Error in BatteryChargePlanSensor update: {e}")
+                self._state = "Error"
 
     @property
     def extra_state_attributes(self):
@@ -212,4 +232,13 @@ async def async_setup_entry(hass, entry, async_add_entities):
         BatteryStorageSensors("Battery Kwh", "battery_capacity_kwh"),
         BatteryChargePlanSensor("Battery Charge Plan")
     ]
+    async def update_charge_plan():
+        charge_plan_sensor = next((sensor for sensor in sensors if isinstance(sensor, BatteryChargePlanSensor)), None)
+        if charge_plan_sensor:
+            await charge_plan_sensor.async_update()
+
+    charging_entity_start = entry.data.get("charging_entity_start")
+    charging_entity_end = entry.data.get("charging_entity_end")
+
     async_add_entities(sensors, True)
+    hass.data[DOMAIN]["update_charge_plan"] = update_charge_plan

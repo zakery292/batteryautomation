@@ -12,6 +12,7 @@ account_id = ""
 battery_capacity = ""
 battery_entity = ""
 
+
 def set_api_key_and_account(key, account):
     global api_key, account_id
     api_key = key
@@ -24,4 +25,6 @@ def get_api_key_and_account():
 def set_battery_capacity(battery_capacity_ah):
     battery_capacity = battery_capacity_ah
 
-
+unique_id_battery_sensor = "battery_sensor"
+unique_id_charge_plan_sensor = "charge_plan_sensor"
+unique_id_charging_control_switch = "charge_control_switch"

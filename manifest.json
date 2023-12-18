@@ -1,6 +1,7 @@
 {
     "domain": "battery_automation",
     "name": "Battery Automation",
+    "icon": "mdi:battery", 
     "codeowners": ["@zakery292"],
     "dependencies": [],
     "documentation": "https://github.com/zakery292/batteryautomation",
@@ -9,4 +10,5 @@
     "requirements": [],
     "config_flow": true,
     "version": "0.1"
+
   }
