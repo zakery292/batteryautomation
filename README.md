@@ -18,7 +18,12 @@ Currently the integration will calculate the actual kwh of the batteries based o
 
 Can and will now create a dynamic charge plan updated every 30 mins based upon battery level, will select slots and produce a plan in time order to charge with a estimated cost based upon your charge rate. 
 
-Next steps are to get this to be sent to the inverter
+Will now send to inverter and you can turn off the charge plan so it wont run if you dont want it too, next steps are to offer the best afternoon rates and evening rates till midnight via a choice of slots eg if you notice there are three super cheap slots
+before midnight select three itll pick the cheapest three and then itll send it for you, eventually i want the charge plan to be dynamic untill midnight so eg if you @ midnight the charge is 40% but you want 70% overall itll sort the difference and charge
+
+then moving forward solcast integration amongst other things.
+
+the integration will work with LUX inverters using GuyBWs integration but should work with others if they are using time. for the sending of the times to the inverter not input.datetime but this can be amended in a future versions if both are required. 
 
 The further aim is to get the integration to look at the last 7 days usage create a averge between certain times and ensure capacity during peak usage times almost like AI but im not that cleaver! 
 
