@@ -3,21 +3,37 @@
 import logging
 from homeassistant.helpers.entity import Entity
 from .octopus_api import get_octopus_energy_rates, rates_data
-from .const import (get_api_key_and_account, DOMAIN, unique_id_charge_plan_sensor, unique_id_battery_sensor, unique_id_charging_status)
+from .const import (
+    get_api_key_and_account,
+    DOMAIN,
+    unique_id_charge_plan_sensor,
+    unique_id_battery_sensor,
+    unique_id_charging_status,
+)
 from homeassistant.helpers.event import async_track_time_interval
-from datetime import timedelta
+from datetime import timedelta, datetime
 import asyncio
 import math
 from .charging_control import ChargingControl
+
 SCAN_INTERVAL = timedelta(minutes=30)  # Set the desired interval
 _LOGGER = logging.getLogger(__name__)
+
 
 #### Octopus Rates below #####
 async def update_charge_plan(hass):
     """Function to update the charge plan sensor."""
-    charge_plan_sensor = next((sensor for sensor in hass.data[DOMAIN]["sensors"] if isinstance(sensor, BatteryChargePlanSensor)), None)
+    charge_plan_sensor = next(
+        (
+            sensor
+            for sensor in hass.data[DOMAIN]["sensors"]
+            if isinstance(sensor, BatteryChargePlanSensor)
+        ),
+        None,
+    )
     if charge_plan_sensor:
         await charge_plan_sensor.async_update()
+
 
 class OctopusEnergySensor(Entity):
     def __init__(self, name, rate_type):
@@ -26,7 +42,10 @@ class OctopusEnergySensor(Entity):
         self._state = None
         self._attributes = {}
         self._api_key, self._account_id = get_api_key_and_account()
-
+    @property
+    def update_interval(self):
+        """Return the polling interval for the sensor."""
+        return SCAN_INTERVAL
     @property
     def name(self):
         """Return the name of the sensor."""
@@ -55,6 +74,7 @@ class OctopusEnergySensor(Entity):
             "name": "Octopus Energy",
             "manufacturer": "Zakery292",
         }
+
     @property
     def icon(self):
         """Icon to use in the frontend, if any."""
@@ -70,8 +90,31 @@ class OctopusEnergySensor(Entity):
         """Return the polling state."""
         return True
 
+    async def async_added_to_hass(self):
+        # Schedule the periodic update as a background task
+        self.hass.loop.create_task(self.async_periodic_update())
+
+    async def async_periodic_update(self):
+        while True:
+            now = datetime.now()
+            # Calculate minutes until the next half-hour or hour mark
+            minutes_to_wait = 30 - (now.minute % 30)
+            _LOGGER.info("Octopus: Minutes till half hour: %s", minutes_to_wait)
+            # If currently on the half-hour or hour mark, set minutes_to_wait to 0
+            if now.minute % 30 == 0 and now.second == 0:
+                minutes_to_wait = 0
+
+            # Wait until the next update point
+            await asyncio.sleep(minutes_to_wait * 60 - now.second)
+
+            # Perform the update
+            await self.async_update()
+
+
     async def async_update(self):
+
         """Fetch new state data for the sensor."""
+        _LOGGER.info(f"Updating Octopus Energy data for {self._name}")
         try:
             rates = self.hass.data[DOMAIN]["rates_data"].get(self._rate_type, [])
             if rates:
@@ -89,7 +132,9 @@ class OctopusEnergySensor(Entity):
             self._state = "Error"
             self._attributes = {}
 
+
 ##### Battery Storage Sensors below #####
+
 
 class BatteryStorageSensors(Entity):
     def __init__(self, name, sensor_type):
@@ -139,6 +184,7 @@ class BatteryStorageSensors(Entity):
             _LOGGER.error(f"Error updating Battery Capacity: {e}")
             self._state = "Error"
 
+
 class BatteryChargePlanSensor(Entity):
     def __init__(self, name):
         self._name = name
@@ -146,8 +192,12 @@ class BatteryChargePlanSensor(Entity):
         self._attributes = {}
 
     async def async_added_to_hass(self):
-        self.hass.bus.async_listen("custom_slider_value_changed_event", self.handle_slider_change)
-
+        self.hass.bus.async_listen(
+            "custom_slider_value_changed_event", self.handle_slider_change
+        )
+        async_track_time_interval(
+            self.hass, self.async_update, timedelta(minutes=1)
+        )
 
     async def handle_slider_change(self, event):
         _LOGGER.info("Detected slider change in BatteryChargePlanSensor.")
@@ -181,7 +231,7 @@ class BatteryChargePlanSensor(Entity):
         # Ensure a unique ID across different sensors
         return f"{unique_id_charge_plan_sensor}_{self._name}"
 
-    async def async_update(self):
+    async def async_update(self, now=None):
         # Check if the charging control is enabled
         _LOGGER.info("Starting async_update in BatteryChargePlanSensor")
         if not self.hass.data[DOMAIN].get("charging_control_enabled", False):
@@ -193,48 +243,87 @@ class BatteryChargePlanSensor(Entity):
             try:
                 capacity_kwh = self.hass.data[DOMAIN].get("battery_capacity_kwh")
                 soc_percentage = self.hass.data[DOMAIN].get("battery_charge_state")
-                charge_rate_kwh = self.hass.data[DOMAIN].get("battery_charge_rate") / 1000
-                rates_from_midnight = self.hass.data[DOMAIN]["rates_data"].get("rates_from_midnight", [])
-                custom_soc_percentage = self.hass.data[DOMAIN].get("custom_soc_percentage")
+                charge_rate_kwh = (
+                    self.hass.data[DOMAIN].get("battery_charge_rate") / 1000
+                )
+                rates_from_midnight = self.hass.data[DOMAIN]["rates_data"].get(
+                    "rates_from_midnight", []
+                )
+                custom_soc_percentage = self.hass.data[DOMAIN].get(
+                    "custom_soc_percentage"
+                )
 
-                if not all([capacity_kwh, soc_percentage, charge_rate_kwh, rates_from_midnight]):
-                    _LOGGER.error("One or more required data elements are missing or invalid.")
+                if not all(
+                    [capacity_kwh, soc_percentage, charge_rate_kwh, rates_from_midnight]
+                ):
+                    _LOGGER.error(
+                        "One or more required data elements are missing or invalid."
+                    )
                     self._state = "Unavailable"
                     return
 
                 # Default to 100% or use slider value if already set
-                target_soc_percentage = 100 if custom_soc_percentage in [None, 0] else custom_soc_percentage
-                _LOGGER.info(f"Target State of Charge Percentage: {target_soc_percentage}")
+                target_soc_percentage = (
+                    100 if custom_soc_percentage in [None, 0] else custom_soc_percentage
+                )
+                _LOGGER.info(
+                    f"Target State of Charge Percentage: {target_soc_percentage}"
+                )
                 # Calculate charge level and number of slots
-                required_kwh = capacity_kwh * (target_soc_percentage - soc_percentage) / 100
+                required_kwh = (
+                    capacity_kwh * (target_soc_percentage - soc_percentage) / 100
+                )
                 num_slots = math.ceil(max(required_kwh, 0) / (charge_rate_kwh / 2))
-                _LOGGER.info(f"Required kWh: {required_kwh}, Number of slots: {num_slots}")
+                _LOGGER.info(
+                    f"Required kWh: {required_kwh}, Number of slots: {num_slots}"
+                )
 
+                # Sort rates and filter out past slots
+                now = datetime.now()
+                sorted_rates = sorted(
+                    rates_from_midnight, key=lambda x: float(x["Cost"].rstrip("p"))
+                )
+                valid_sorted_rates = [
+                    rate
+                    for rate in sorted_rates
+                    if datetime.strptime(rate["Start Time"], "%H:%M:%S").time()
+                    > now.time()
+                ]
+                cheapest_slots = valid_sorted_rates[:num_slots]
 
-                sorted_rates = sorted(rates_from_midnight, key=lambda x: float(x['Cost'].rstrip('p')))
-                cheapest_slots = sorted_rates[:num_slots]
-
-                sorted_cheapest_slots = sorted(cheapest_slots, key=lambda x: x['Start Time'])
-                slot_times = [slot['Start Time'] for slot in sorted_cheapest_slots]
+                sorted_cheapest_slots = sorted(
+                    cheapest_slots, key=lambda x: x["Start Time"]
+                )
+                slot_times = [slot["Start Time"] for slot in sorted_cheapest_slots]
 
                 # Calculate total cost
-                total_cost = sum(float(slot['Cost'].rstrip('p')) * (charge_rate_kwh / 2) for slot in sorted_cheapest_slots)
+                total_cost = sum(
+                    float(slot["Cost"].rstrip("p")) * (charge_rate_kwh / 2)
+                    for slot in sorted_cheapest_slots
+                )
 
                 # Update the slot_times in global domain data
                 self.hass.data[DOMAIN]["slot_times"] = slot_times
 
                 # Check for changes in custom_soc_percentage and update the plan if needed
-                previous_soc_percentage = self.hass.data[DOMAIN].get("previous_soc_percentage")
+                previous_soc_percentage = self.hass.data[DOMAIN].get(
+                    "previous_soc_percentage"
+                )
                 if custom_soc_percentage != previous_soc_percentage:
-                    self.hass.data[DOMAIN]["previous_soc_percentage"] = custom_soc_percentage
+                    self.hass.data[DOMAIN][
+                        "previous_soc_percentage"
+                    ] = custom_soc_percentage
                     _LOGGER.info("Slider value changed. Updating charge plan.")
-                    self.hass.bus.async_fire("custom_charge_plan_updated_event", {"new_slot_times": slot_times})
+                    self.hass.bus.async_fire(
+                        "custom_charge_plan_updated_event",
+                        {"new_slot_times": slot_times},
+                    )
 
                 self._state = "Calculated"
                 self._attributes = {
-                    'required_slots': num_slots,
-                    'total_cost': f"{total_cost:.2f}p",
-                    'slot_times': slot_times
+                    "required_slots": num_slots,
+                    "total_cost": f"{total_cost:.2f}p",
+                    "slot_times": slot_times,
                 }
                 # Update the slot_times in global domain data
                 self.hass.data[DOMAIN]["slot_times"] = slot_times
@@ -246,7 +335,7 @@ class BatteryChargePlanSensor(Entity):
     async def async_periodic_update(self):
         while self.hass.data[DOMAIN].get("charging_control_enabled", False):
             await self.async_update()
-            await asyncio.sleep(600)  # 30 minutes
+            await asyncio.sleep(60)  # 30 minutes
             if self.time_reached_or_control_off():
                 break
 
@@ -258,7 +347,10 @@ class BatteryChargePlanSensor(Entity):
     def extra_state_attributes(self):
         """Return extra state attributes."""
         return self._attributes
+
+
 # charge sensor message
+
 
 class ChargingStatusSensor(Entity):
     def __init__(self, name):
@@ -269,6 +361,7 @@ class ChargingStatusSensor(Entity):
     def name(self):
         """Return the name of the sensor."""
         return self._name
+
     @property
     def unique_id(self):
         """Return a unique ID to use for this sensor."""
@@ -278,6 +371,7 @@ class ChargingStatusSensor(Entity):
     def state(self):
         """Return the state of the sensor."""
         return self._state
+
     @property
     def device_info(self):
         """Return information about the device this sensor is part of."""
@@ -293,7 +387,6 @@ class ChargingStatusSensor(Entity):
         self.schedule_update_ha_state()
 
 
-
 async def async_setup_entry(hass, entry, async_add_entities):
     """Setup sensor platform."""
     sensors = [
@@ -305,15 +398,16 @@ async def async_setup_entry(hass, entry, async_add_entities):
         OctopusEnergySensor("Current Import Rate", "current_import_rate"),
         BatteryStorageSensors("Battery Kwh", "battery_capacity_kwh"),
         BatteryChargePlanSensor("Battery Charge Plan"),
-        ChargingStatusSensor("Charging Status")  # Add the charging status sensor
+        ChargingStatusSensor("Charging Status"),  # Add the charging status sensor
     ]
     hass.data[DOMAIN]["sensors"] = sensors
     hass.data[DOMAIN]["update_charge_plan"] = lambda: update_charge_plan(hass)
 
     async_add_entities(sensors, True)
 
-
-    hass.data[DOMAIN]["charging_status_sensor"] = next((sensor for sensor in sensors if isinstance(sensor, ChargingStatusSensor)), None)
+    hass.data[DOMAIN]["charging_status_sensor"] = next(
+        (sensor for sensor in sensors if isinstance(sensor, ChargingStatusSensor)), None
+    )
 
     charging_entity_start = entry.data.get("charging_entity_start")
     charging_entity_end = entry.data.get("charging_entity_end")
