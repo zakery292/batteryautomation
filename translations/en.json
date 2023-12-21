@@ -1,0 +1,20 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Octopus Account Detials",
+                "description": "Enter your API Key and ID below",
+                "data": {
+                    "api_key": "Enter APi Key Here",
+                    "account_id": "Enter Account ID here 1-111111",
+                    "battery_charge_rate": "Charge Rate in watts",
+                    "battery_charge": "Battery Charge level Sensor",
+                    "battery_capacity": "Battery Capacity in Ah",
+                    "charge_start": "Charge Start Time",
+                    "charge_end": "Charge End Time"
+                }
+            }
+        }
+    }
+
+}
