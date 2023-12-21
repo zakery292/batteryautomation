@@ -171,7 +171,7 @@ class ChargingControl:
                 minutes, _ = divmod(remainder, 60)
 
                 # Update charging status sensor with countdown
-                countdown_message = f"Next slot starts in {int(hours)}h {int(minutes)}m."
+                countdown_message = f"Next slot starts in {int(hours)}h {int(minutes)}m. At {next_slot_info.strftime('%H:%M')} "
                 if charging_status_sensor:
                     charging_status_sensor.update_state(countdown_message)
 
@@ -181,13 +181,14 @@ class ChargingControl:
                 remaining_time = (start_slot - now).total_seconds()
 
             # Set charging times for the current slot
-            await self.set_charging_times(start_slot.strftime("%H:%M"), end_slot.strftime("%H:%M"))
+            await self.set_charging_times(
+                start_slot.strftime("%H:%M"), end_slot.strftime("%H:%M")
+            )
 
             # Update status for the current slot
             if charging_status_sensor:
                 slot_message = f"Charging from {start_slot.strftime('%H:%M')} to {end_slot.strftime('%H:%M')}."
                 charging_status_sensor.update_state(slot_message)
-                
 
             # Update for next combined slot, if exists
             if i + 1 < len(combined_slots):
@@ -200,7 +201,7 @@ class ChargingControl:
                 self.all_slots_processed = True
                 if charging_status_sensor:
                     charging_status_sensor.update_state(
-                        "All charging slots for today processed."
+                        f"All charging slots for today processed. The last slot ends at {end_slot.strftime('%H;%M')}."
                     )
                 break
 
