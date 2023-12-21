@@ -21,7 +21,11 @@ class ChargingControl:
         self.all_slots_processed = False
         self.waiting_for_plan = True
         self.loop_running = False  # Added to track if the control loop is running
-        self.hass.bus.async_listen("custom_charge_plan_updated_event", self.handle_charge_plan_update)
+        self.hass.bus.async_listen(
+            "custom_charge_plan_updated_event", self.handle_charge_plan_update
+        )
+        self.last_charge_start = None
+        self.last_charge_end = None
 
     async def handle_charge_plan_update(self, event):
         _LOGGER.info("Received updated charge plan event.")
@@ -66,8 +70,12 @@ class ChargingControl:
                 slots = self.hass.data[DOMAIN].get("slot_times", [])
                 if not slots:
                     _LOGGER.info("No slots available. Waiting for new charge plan.")
-                    self.hass.data[DOMAIN]["charging_status_sensor"].update_state("Waiting for new charge plan")
-                    await asyncio.sleep(self._check_interval)  # Wait before checking again
+                    self.hass.data[DOMAIN]["charging_status_sensor"].update_state(
+                        "Waiting for new charge plan"
+                    )
+                    await asyncio.sleep(
+                        self._check_interval
+                    )  # Wait before checking again
                     continue
                 else:
                     _LOGGER.info("Slots found. Proceeding with processing.")
@@ -84,7 +92,6 @@ class ChargingControl:
             # Sleep for the defined interval before rechecking
             await asyncio.sleep(self._check_interval)
 
-
     async def disable_charging_control(self):
         """Disable the charging control switch."""
         self.hass.data[DOMAIN]["charging_control_enabled"] = False
@@ -99,16 +106,24 @@ class ChargingControl:
         if not self.slots:
             _LOGGER.info("No slots available.")
             if charging_status_sensor:
-                charging_status_sensor.update_state("No valid charge plan available. Waiting for new charge plan.")
+                charging_status_sensor.update_state(
+                    "No valid charge plan available. Waiting for new charge plan."
+                )
             self.all_slots_processed = True
             return
 
         now = datetime.now()
         _LOGGER.info(f"Current time: {now.strftime('%H:%M')}")
 
-        slot_datetimes = [datetime.combine(now.date(), datetime.strptime(slot, "%H:%M:%S").time()) for slot in self.slots]
+        slot_datetimes = [
+            datetime.combine(now.date(), datetime.strptime(slot, "%H:%M:%S").time())
+            for slot in self.slots
+        ]
         # Adjust for slots after midnight
-        slot_datetimes = [slot_datetime + timedelta(days=1) if slot_datetime < now else slot_datetime for slot_datetime in slot_datetimes]
+        slot_datetimes = [
+            slot_datetime + timedelta(days=1) if slot_datetime < now else slot_datetime
+            for slot_datetime in slot_datetimes
+        ]
 
         # Check for consecutive slots and combine them
         combined_slots = []
@@ -127,40 +142,67 @@ class ChargingControl:
 
         # Set the first combined slot immediately
         first_start, first_end = combined_slots[0]
-        await self.set_charging_times(first_start.strftime("%H:%M"), first_end.strftime("%H:%M"))
+        if first_start != self.last_charge_start or first_end != self.last_charge_end:
+            self.last_charge_start = first_start
+            self.last_charge_end = first_end
+            await self.set_charging_times(
+                first_start.strftime("%H:%M"), first_end.strftime("%H:%M")
+            )
 
         # Update charging status sensor for the first combined slot
         if charging_status_sensor:
-            next_slot_info = f"Next slot: {combined_slots[1][0].strftime('%H:%M')}" if len(combined_slots) > 1 else "No more slots."
-            charging_status_sensor.update_state(f"Charging from {first_start.strftime('%H:%M')} to {first_end.strftime('%H:%M')}. {next_slot_info}")
+            next_slot_info = (
+                f"Next slot: {combined_slots[1][0].strftime('%H:%M')}"
+                if len(combined_slots) > 1
+                else "No more slots."
+            )
+            charging_status_sensor.update_state(
+                f"Charging from {first_start.strftime('%H:%M')} to {first_end.strftime('%H:%M')}. {next_slot_info}"
+            )
 
         # Handle subsequent combined slots
-        for i, (start_slot, end_slot) in enumerate(combined_slots[1:], start=1):
-            while now < start_slot - timedelta(minutes=5):
-                # Update countdown to next slot
-                remaining_wait = (start_slot - timedelta(minutes=5) - now).total_seconds()
-                await asyncio.sleep(min(60, remaining_wait))
-                now = datetime.now()
+        for i, (start_slot, end_slot) in enumerate(combined_slots):
+            # Calculate remaining time until start of the slot
+            remaining_time = (start_slot - now).total_seconds()
 
-            # Set charging times for the current combined slot
+            while remaining_time > 0:
+                # Calculate hours and minutes for countdown message
+                hours, remainder = divmod(remaining_time, 3600)
+                minutes, _ = divmod(remainder, 60)
+
+                # Update charging status sensor with countdown
+                countdown_message = f"Next slot starts in {int(hours)}h {int(minutes)}m."
+                if charging_status_sensor:
+                    charging_status_sensor.update_state(countdown_message)
+
+                # Wait for 1 minute or until the slot start time
+                await asyncio.sleep(min(60, remaining_time))
+                now = datetime.now()
+                remaining_time = (start_slot - now).total_seconds()
+
+            # Set charging times for the current slot
             await self.set_charging_times(start_slot.strftime("%H:%M"), end_slot.strftime("%H:%M"))
+
+            # Update status for the current slot
+            if charging_status_sensor:
+                slot_message = f"Charging from {start_slot.strftime('%H:%M')} to {end_slot.strftime('%H:%M')}."
+                charging_status_sensor.update_state(slot_message)
+                
 
             # Update for next combined slot, if exists
             if i + 1 < len(combined_slots):
                 next_start, _ = combined_slots[i + 1]
                 if charging_status_sensor:
-                    charging_status_sensor.update_state(f"Charging slot from {start_slot.strftime('%H:%M')} to {end_slot.strftime('%H:%M')} active. Next slot: {next_start.strftime('%H:%M')}")
+                    charging_status_sensor.update_state(
+                        f"Charging slot from {start_slot.strftime('%H:%M')} to {end_slot.strftime('%H:%M')} active. Next slot: {next_start.strftime('%H:%M')}"
+                    )
             else:
                 self.all_slots_processed = True
                 if charging_status_sensor:
-                    charging_status_sensor.update_state("All charging slots for today processed.")
+                    charging_status_sensor.update_state(
+                        "All charging slots for today processed."
+                    )
                 break
-
-
-
-
-
-
 
     async def set_charging_times(self, start_time, end_time):
         start_time_obj = datetime.strptime(start_time, "%H:%M").time()
