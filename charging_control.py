@@ -39,10 +39,11 @@ class ChargingControl:
         """Reset the charging control to initial state."""
         self.all_slots_processed = False
         self.waiting_for_plan = True
+        self.loop_running = False  # Ensure the loop stops running
+        await self.reset_charging_times()  # Reset charging times to 00:00
         self.hass.data[DOMAIN]["charging_status_sensor"].update_state(
             "Waiting for charge plan"
         )
-        self.loop_running = False  # Ensure the loop stops running
 
     async def update_charging_control_state(self, is_enabled: bool):
         """Update the state of the charging control."""
@@ -91,6 +92,9 @@ class ChargingControl:
 
             # Sleep for the defined interval before rechecking
             await asyncio.sleep(self._check_interval)
+
+            if not self.all_slots_processed:
+                await self.reset_charging_control()
 
     async def disable_charging_control(self):
         """Disable the charging control switch."""
@@ -171,7 +175,7 @@ class ChargingControl:
                 minutes, _ = divmod(remainder, 60)
 
                 # Update charging status sensor with countdown
-                countdown_message = f"Next slot starts in {int(hours)}h {int(minutes)}m. At {next_slot_info.strftime('%H:%M')} "
+                countdown_message = f"Next slot starts in {int(hours)}h {int(minutes)}m. At {next_slot_info} "
                 if charging_status_sensor:
                     charging_status_sensor.update_state(countdown_message)
 
