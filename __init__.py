@@ -11,6 +11,9 @@ from .get_tariff import get_tariff
 from .charging_control import ChargingControl
 from .sensor import BatteryChargePlanSensor
 from .switch import ChargingControlSwitchEntity
+from homeassistant.const import EVENT_STATE_CHANGED
+
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,7 +35,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     # Initialize domain data if not already done
     if DOMAIN not in hass.data:
-        hass.data[DOMAIN] = {"charging_control_enabled": False}
+        hass.data[DOMAIN] = {"charging_control_enabled": False,
+                             "custom_soc_percentage": 0,
+                             "charging_status_sensor": None
+                             }
 
     # Store API key and Account ID for global access
     set_api_key_and_account(api_key, account_id)
@@ -73,15 +79,42 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     charging_entity_start = entry.data.get("charge_start")
     charging_entity_end = entry.data.get("charge_end")
     hass.data[DOMAIN]["charging_control"] = ChargingControl(hass, charging_entity_start, charging_entity_end)
-
-
     # Forward to sensor and switch setup
-    hass.async_create_task(
-        hass.config_entries.async_forward_entry_setup(entry, Platform.SENSOR)
-    )
+    await hass.config_entries.async_forward_entry_setup(entry, Platform.SENSOR)
+    
     hass.async_create_task(
         hass.config_entries.async_forward_entry_setup(entry, Platform.SWITCH)
     )
+    hass.async_create_task(
+        hass.config_entries.async_forward_entry_setup(entry, Platform.NUMBER)
+    )
+
+
+
+        # Reference the update_charge_plan function from sensor.py
+    update_charge_plan = hass.data[DOMAIN]["update_charge_plan"]
+
+    # Event listener for battery charge state and custom_soc_percentage changes
+    async def state_change_listener(event):
+        """Handle state changes for entities."""
+        entity_id = event.data.get('entity_id')
+        new_state = event.data.get('new_state')
+        old_state = event.data.get('old_state')
+
+        # Using the global value for battery charge state
+        if entity_id == hass.data[DOMAIN].get("battery_charge_state"):
+            _LOGGER.info("init abc battery charge:%s", battery_charge_state)
+            if old_state is not None and abs(float(new_state.state) - float(old_state.state)) > 5:
+                await update_charge_plan()
+
+        # Using the domain value for custom_soc_percentage
+        elif entity_id == hass.data[DOMAIN].get("custom_soc_percentage_entity_id"):
+            if new_state.state is not None and old_state.state != new_state.state:
+                await update_charge_plan()
+
+    hass.bus.async_listen(EVENT_STATE_CHANGED, state_change_listener)
+
+
 
     return True
 

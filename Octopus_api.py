@@ -10,6 +10,7 @@ _LOGGER = logging.getLogger(__name__)
 # Global variable to store rates
 rates_data = {}
 
+
 async def get_octopus_energy_rates(api_key, account_id, rate_type):
     current_day = datetime.now()
     tomorrow = current_day + timedelta(days=1)
@@ -49,7 +50,10 @@ async def get_octopus_energy_rates(api_key, account_id, rate_type):
     # Return the requested rates data
     return rates_data.get(rate_type)
 
-def process_and_store_rates(rates_import, rate_type, current_day, tomorrow, current_day_str, tomorrow_str):
+
+def process_and_store_rates(
+    rates_import, rate_type, current_day, tomorrow, current_day_str, tomorrow_str
+):
     rates_list = []
 
     for item in rates_import:
@@ -80,14 +84,14 @@ def process_and_store_rates(rates_import, rate_type, current_day, tomorrow, curr
             datetime.strptime(d["Start Time"], "%H:%M:%S"),
         ),
     )
-    #_LOGGER.info("rates list: %s", list)
+    # _LOGGER.info("rates list: %s", list)
     if rate_type == "rates_from_midnight":
         rates_data["rates_from_midnight"] = [
             item
             for item in sorted_rates
-            if item_meets_condition(item, "00:00:00", "07:30:00", current_day, tomorrow)
+            if item_meets_condition(item, "00:00:00", "08:00:00", current_day, tomorrow)
         ]
-        #_LOGGER.info(f"Rates from midnight: {rates_data['rates_from_midnight']}")  # Log specific rate data
+        # _LOGGER.info(f"Rates from midnight: {rates_data['rates_from_midnight']}")  # Log specific rate data
         return
 
     elif rate_type == "afternoon_today":
@@ -104,7 +108,7 @@ def process_and_store_rates(rates_import, rate_type, current_day, tomorrow, curr
             for item in sorted_rates
             if item_meets_condition(item, "12:00:00", "16:00:00", tomorrow)
         ]
-        #_LOGGER.info(f"Rates Afternoon Tomorrow: {rates_data['afternoon_tomorrow']}")
+        # _LOGGER.info(f"Rates Afternoon Tomorrow: {rates_data['afternoon_tomorrow']}")
         return
     elif rate_type == "all_rates":
         rates_data["all_rates"] = [
@@ -156,10 +160,10 @@ def process_and_store_rates(rates_import, rate_type, current_day, tomorrow, curr
         rates_data["rates_left"] = future_rates_sorted
         return
         # Add other rate types as needed
-    #_LOGGER.info("rates data:%s", rates_data)
+    # _LOGGER.info("rates data:%s", rates_data)
 
 
-#_LOGGER.info("rates data:%s", rates_data)
+# _LOGGER.info("rates data:%s", rates_data)
 
 
 def item_meets_condition(item, start_time, end_time, current_day, tomorrow=None):
@@ -174,6 +178,8 @@ def item_meets_condition(item, start_time, end_time, current_day, tomorrow=None)
         <= datetime.combine(day, datetime.strptime(end_time, "%H:%M:%S").time())
         for day in [current_day, tomorrow]
     )
-#_LOGGER.info("rates Global: %s", rates_data)
+
+
+# _LOGGER.info("rates Global: %s", rates_data)
 
 # Additional functions if needed

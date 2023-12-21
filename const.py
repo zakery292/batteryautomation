@@ -28,3 +28,5 @@ def set_battery_capacity(battery_capacity_ah):
 unique_id_battery_sensor = "battery_sensor"
 unique_id_charge_plan_sensor = "charge_plan_sensor"
 unique_id_charging_control_switch = "charge_control_switch"
+unique_id_custom_soc_percentage = "custom_soc_percentage"
+unique_id_charging_status = "custom_charging_status"
