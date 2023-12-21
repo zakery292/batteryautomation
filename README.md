@@ -1,4 +1,4 @@
-# Version 1.0.1 Working and tested
+# Version 1.0.2 Working and tested
 ## Battery Automation for inverters of all makes and models that already intergrate into home assistant and have remote control Confimred working with LUXpower tek with GuyBW's lux integration 
 
 ### Fuctions to inlcude the following:  
