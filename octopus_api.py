@@ -161,10 +161,9 @@ def process_and_store_rates(
         rates_data["rates_left"] = future_rates_sorted
         return
         # Add other rate types as needed
-    # _LOGGER.info("rates data:%s", rates_data)
+    #_LOGGER.info("rates data:%s", rates_data)
 
 
-# _LOGGER.info("rates data:%s", rates_data)
 
 
 def item_meets_condition(item, start_time, end_time, current_day, tomorrow=None):

@@ -45,7 +45,6 @@ class ChargingControlSwitchEntity(SwitchEntity):
         self._state = True
         self.async_write_ha_state()
 
-        # Update charging control state
         self.hass.data[DOMAIN]["charging_control_enabled"] = True
 
         # Call the update_charge_plan function
@@ -55,6 +54,19 @@ class ChargingControlSwitchEntity(SwitchEntity):
         charging_control = self.hass.data[DOMAIN].get("charging_control")
         if charging_control:
             await charging_control.update_charging_control_state(True)
+
+        # Turn on the ac_charge switch based on the provided entity_id
+        ac_charge_entity_id = self._hass.data[DOMAIN].get("ac_charge_entity_id")
+        if ac_charge_entity_id:
+            try:
+                await self.hass.services.async_call(
+                    "switch",
+                    "turn_on",
+                    {"entity_id": ac_charge_entity_id}
+                )
+                _LOGGER.info(f"Turning on AC charge switch: {ac_charge_entity_id}")
+            except Exception as e:
+                _LOGGER.error(f"Error turning on AC charge switch: {e}")
 
     async def async_turn_off(self, **kwargs):
         self._state = False
@@ -66,6 +78,19 @@ class ChargingControlSwitchEntity(SwitchEntity):
         charging_control = self.hass.data[DOMAIN].get("charging_control")
         if charging_control:
             await charging_control.reset_charging_control()
+
+        # Turn off the ac_charge switch based on the provided entity_id
+        ac_charge_entity_id = self._hass.data[DOMAIN].get("ac_charge_entity_id")
+        if ac_charge_entity_id:
+            try:
+                await self.hass.services.async_call(
+                    "switch",
+                    "turn_off",
+                    {"entity_id": ac_charge_entity_id}
+                )
+                _LOGGER.info(f"Turning off AC charge switch: {ac_charge_entity_id}")
+            except Exception as e:
+                _LOGGER.error(f"Error turning off AC charge switch: {e}")
 
     @property
     def should_poll(self):

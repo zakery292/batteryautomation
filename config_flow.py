@@ -1,5 +1,5 @@
 # config_flow.py
-"""Config flow for blueprint"""
+"""Config flow"""
 import logging
 import voluptuous as vol
 from homeassistant import config_entries, core
@@ -38,6 +38,12 @@ class BatteryAutomationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if "capacity" in entity.entity_id
             or entity.attributes.get("device_class") == "battery"
         ]
+        ac_charge = [
+            entity.entity_id
+            for entity in self.hass.states.async_all()
+            if "charge" in entity.entity_id
+            or entity.attributes.get("device_class") == "switch"
+        ]
         charge_start = [
             entity.entity_id
             for entity in self.hass.states.async_all()
@@ -55,7 +61,9 @@ class BatteryAutomationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             api_key = user_input.get("api_key")
             account_id = user_input.get("account_id")
             battery_charge_rate = user_input.get("battery_charge_rate")
-            _LOGGER.info(f"battery_charge_rate is an integer: {isinstance(battery_charge_rate, int)}")
+            _LOGGER.info(
+                f"battery_charge_rate is an integer: {isinstance(battery_charge_rate, int)}"
+            )
 
             async with aiohttp.ClientSession() as session:
                 if await validate_api_key(session, api_key, account_id):
@@ -79,6 +87,7 @@ class BatteryAutomationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Optional("battery_charge_rate", default=""): int,
                     vol.Optional("battery_charge"): vol.In(battery_charge),
                     vol.Optional("battery_capacity"): vol.In(battery_capacity),
+                    vol.Optional("ac_charge"): vol.In(ac_charge),
                     vol.Optional("charge_start"): vol.In(charge_start),
                     vol.Optional("charge_end"): vol.In(charge_end),
                 }
