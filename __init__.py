@@ -21,11 +21,9 @@ def set_charging_control_enabled(hass: HomeAssistant, value: bool):
     """Set the state of the charging control."""
     hass.data[DOMAIN]["charging_control_enabled"] = value
 
-
 def get_charging_control_enabled(hass: HomeAssistant) -> bool:
     """Get the state of the charging control."""
     return hass.data[DOMAIN].get("charging_control_enabled", False)
-
 
 def update_local_rates_data(hass):
     """Update local rates data based on the current time."""
@@ -65,7 +63,11 @@ def update_local_rates_data(hass):
     _LOGGER.info(f"Updated rates left: {rates_left}")
 
     _LOGGER.info("Local rates data updated.")
+    for sensor in hass.data[DOMAIN].get("sensors", []):
+            if isinstance(sensor, OctopusEnergySensor):
+                hass.create_task(sensor.async_refresh())
 
+    _LOGGER.info("Local rates data updated and sensor updates triggered.")
 
 
 
@@ -92,37 +94,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     # Store API key and Account ID for global access
     set_api_key_and_account(api_key, account_id)
 
-    # Fetch tariff and rates data
-    tariff, product_code = await get_tariff(api_key, account_id)
-    if not tariff or not product_code:
-        _LOGGER.error("Failed to fetch tariff information.")
-        return False
+    # Start tariff fetching as a background task
+    hass.async_create_task(get_tariff_background(api_key, account_id, hass))
 
-    rate_types = [
-        "rates_from_midnight",
-        "afternoon_today",
-        "afternoon_tomorrow",
-        "all_rates",
-        "current_import_rate",
-        "rates_left",
-    ]
-    rates_data = {}
-    for rate_type in rate_types:
-        fetched_data = await get_octopus_energy_rates(api_key, account_id, rate_type)
-        if fetched_data:
-            rates_data[rate_type] = fetched_data
-
-    if not rates_data:
-        _LOGGER.error("Failed to fetch rates data.")
-        return False
-
-    # Store rates data
-    hass.data[DOMAIN]["rates_data"] = rates_data
-    # _LOGGER.info('Rates Data: %s', rates_data)
-
-    # _LOGGER.info('Rates Data from init: %s', rates_data)
-
-    # Wait for valid states of battery charge and capacity entities
     await wait_for_valid_state(hass, battery_charge_entity_id)
     await wait_for_valid_state(hass, battery_capacity_entity_id)
 
@@ -197,9 +171,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     hass.loop.create_task(periodic_rate_update(api_key, account_id, hass))
     update_charge_plan = hass.data[DOMAIN]["update_charge_plan"]
 
-
-    # Reference the update_charge_plan function from sensor.py
-
      #Event listener for battery charge state and custom_soc_percentage changes
     async def state_change_listener(event):
         """Handle state changes for entities."""
@@ -239,6 +210,38 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     hass.loop.create_task(local_rates_update())
 
     return True
+
+async def get_tariff_background(api_key, account_id, hass):
+    """Background task for fetching tariff."""
+    try:
+        tariff, product_code = await get_tariff(api_key, account_id)
+        if tariff and product_code:
+            hass.data[DOMAIN]["tariff"] = tariff
+            hass.data[DOMAIN]["product_code"] = product_code
+
+            rate_types = [
+                "rates_from_midnight",
+                "afternoon_today",
+                "afternoon_tomorrow",
+                "all_rates",
+                "current_import_rate",
+                "rates_left",
+            ]
+            rates_data = {}
+            for rate_type in rate_types:
+                fetched_data = await get_octopus_energy_rates(api_key, account_id, rate_type)
+                if fetched_data:
+                    rates_data[rate_type] = fetched_data
+
+            if rates_data:
+                hass.data[DOMAIN]["rates_data"] = rates_data
+            else:
+                _LOGGER.error("Failed to fetch rates data.")
+        else:
+            _LOGGER.error("Failed to fetch tariff information.")
+    except Exception as e:
+        _LOGGER.error(f"Error fetching tariff information: {e}")
+
 
 
 async def wait_for_valid_state(hass, entity_id):

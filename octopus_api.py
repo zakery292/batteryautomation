@@ -3,7 +3,7 @@ import aiohttp
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from .get_tariff import get_tariff
+from .get_tariff import get_tariff, get_export_tariff
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -20,6 +20,7 @@ async def get_octopus_energy_rates(api_key, account_id, rate_type):
 
     # Retrieve product codes using get_tariff function
     product_code_import, tariff_import = await get_tariff(api_key, account_id)
+    product_code_export, tariff_export = await get_export_tariff(api_key, account_id)
 
     if not product_code_import or not tariff_import:
         _LOGGER.error("Failed to get tariff information.")
@@ -27,7 +28,15 @@ async def get_octopus_energy_rates(api_key, account_id, rate_type):
 
     i_import = "-".join(product_code_import)
     c_import = "-".join(tariff_import)
+    c_export = "-".join(tariff_export)
+    i_export = "-".join(product_code_export)
+
+
+
     url_import = f"https://api.octopus.energy/v1/products/{c_import}/electricity-tariffs/{i_import}/standard-unit-rates/"
+    #_LOGGER.info(f'import url: {url_import}')
+    url_export = f'https://api.octopus.energy/v1/products/{c_export}/electricity-tariffs/{i_export}/standard-unit-rates/'
+    _LOGGER.info(f'import url: {url_export}')
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url_import) as response:

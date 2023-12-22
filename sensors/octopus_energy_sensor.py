@@ -1,14 +1,14 @@
+# octopus_energy_sensor.py
 import logging
 from homeassistant.helpers.entity import Entity
-from ..octopus_api import get_octopus_energy_rates, rates_data
 from ..const import (
     get_api_key_and_account,
     DOMAIN,
 )
+from datetime import datetime, timedelta
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.event import async_track_time_interval
-from datetime import timedelta, datetime, time
-import asyncio
-import math
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -19,11 +19,7 @@ class OctopusEnergySensor(Entity):
         self._state = None
         self._attributes = {}
         self._api_key, self._account_id = get_api_key_and_account()
-        self._last_sensor_update = datetime.min
-    #@property
-    #def update_interval(self):
-       # """Return the polling interval for the sensor."""
-       # return SCAN_INTERVAL
+        self._last_sensor_update = None
 
     @property
     def name(self):
@@ -69,23 +65,53 @@ class OctopusEnergySensor(Entity):
         """Return the polling state."""
         return False
 
-    async def async_update(self):
-        _LOGGER.info(f"Updating Octopus Energy data for {self._name}")
+    async def async_refresh(self):
+        """Refresh the sensor data."""
+        _LOGGER.info(f"Refreshing data for sensor {self._name}")
+        # Fetch the new rates data and update sensor state
+        await self.async_update()
+        # Ensure Home Assistant knows the state might have changed
+        self.async_write_ha_state()
 
-        # Call update_local_rates_data to update rates before async_updat
+    async def async_update(self):
+        """Fetch new data and update state."""
+        current = datetime.now()
+        if (
+            self._last_sensor_update is None
+            or current - self._last_sensor_update >= timedelta(minutes=30)
+        ):
+            _LOGGER.info(f"Failsafe update triggered for {self._name}")
+
+        _LOGGER.info(f"Attempting to update Octopus Energy data for {self._name}")
+
         try:
             rates = self.hass.data[DOMAIN]["rates_data"].get(self._rate_type, [])
             if rates:
-                self._state = "Data Available"
-                self._attributes["rates"] = rates
-                if self._rate_type == "current_import_rate":
-                    current_rate = rates[0].get("Cost")
-                    if current_rate is not None:
-                        self._state = current_rate
+                new_state = (
+                    rates[0].get("Cost")
+                    if self._rate_type == "current_import_rate"
+                    else "Data Available"
+                )
+                _LOGGER.debug(f"New state for {self._name}: {new_state}")
+                _LOGGER.debug(f"New attributes for {self._name}: {rates}")
+
+                if new_state != self._state or rates != self._attributes.get("rates"):
+                    _LOGGER.info(
+                        f"State or attributes have changed for {self._name}, updating..."
+                    )
+                    self._state = new_state
+                    self._attributes["rates"] = rates
+                    self._last_sensor_update = datetime.now()
+                    self.async_write_ha_state()
+                else:
+                    _LOGGER.info(
+                        f"No change in state or attributes for {self._name}, no update needed."
+                    )
             else:
-                self._state = "No Data"
-                self._attributes = {}
+                _LOGGER.warning(f"No rate data found for {self._name}.")
+                if self._state != "No Data":
+                    self._state = "No Data"
+                    self._attributes = {}
+                    self.async_write_ha_state()
         except Exception as e:
-            _LOGGER.error(f"Error updating Octopus Energy data: {e}")
-            self._state = "Error"
-            self._attributes = {}
+            _LOGGER.error(f"Error updating Octopus Energy data for {self._name}: {e}")
