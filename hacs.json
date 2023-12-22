@@ -1,7 +1,0 @@
-{
-    "name": "Battery Automation",
-    "content_in_root": true,
-    "render_readme": true,
-    "country": "UK",
-    "homeassistant": "2024.1.0"
-  }
