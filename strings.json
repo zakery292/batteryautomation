@@ -1,0 +1,10 @@
+{
+    "config": {
+      "api_key": {
+        "description": "Enter your API key"
+      },
+      "account_id": {
+        "description": "Enter your account ID"
+      }
+    }
+  }
