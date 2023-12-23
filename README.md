@@ -1,4 +1,4 @@
-# Version 1.0.2 Working and tested
+# Version 1.3.0 Working and tested
 ## Battery Automation for inverters of all makes and models that already intergrate into home assistant and have remote control Confimred working with LUXpower tek with GuyBW's lux integration 
 
 ### Fuctions to inlcude the following:  
@@ -10,10 +10,12 @@
 - Rates from midnight  
 - Rates left till next update  
 - Inverter integration providing you have a number of existing sensors  
-- Battery Ah to current kWh capacticty this is based on what your inverter get from the BMS   
-- Battery Charge plan, this defaults to 100% based on current SOC of battery this will dynamicaly update over the course of the time its turned on in 10minute intervals  
-- Battery charge sensor, this will tell you the the time its next charging from and untill, it also says the slot after that as well. now gives a countdown till the next charging slot starts   
-- Charging control switch, enabling this switch will create a charge plan listed above depending on SOC, as the SOC depleates the amount of slots required increases. if you wish to not wake up with 100% soc then use the slider to set the max soc and it will adjust the times for you  
+- Battery Ah to current kWh capacticty this is based on what your inverter get from the BMS
+- Battery Charge plan now has three modes which are automaticaly set if you leave the switch turned on Afternoon charging (will pick the best rates deafults to 100%, evening rates between 19:00 & 23:59 deafults to 100% and after midnight) for the short term until version 1.4 comes out i suggest automating the time to turn on the charging switch.
+- There are 4 new sensors, these sensors are collalating data from the SOC percentage drop over periods of time and storing them in a SQL database, this data is there to serve two purposes, one to give us a insight into periods of high usage of the battery and react from previous data so the integration can best guess when and how much to charge this is a important step into full autonomy within the integration
+- bug fixes and other fun stuff. 
+
+  
 
 ### How to setup:
 - Add a folder to your custom_components called battery_automation  
