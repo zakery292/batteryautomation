@@ -8,7 +8,8 @@ from .sensors.octopus_energy_sensor import OctopusEnergySensor
 from .sensors.battery_storage_sensor import BatteryStorageSensors
 from .sensors.battery_charge_plan_sensor import BatteryChargePlanSensor
 from .sensors.average_battery_usage import AverageBatteryUsageSensor
-
+from .sensors.battery_prediction_sensor import BatteryPredictionSensor
+from .sensors.peak_hours import PeakHours
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -82,17 +83,60 @@ async def async_setup_entry(hass, entry, async_add_entities):
         ChargingStatusSensor("Charging Status"),  # Add the charging status sensor
     ]
 
-    average_sensors = [
-        AverageBatteryUsageSensor(hass, "Last Hour Usage", timedelta(hours=1)),
-        AverageBatteryUsageSensor(hass, "Last 12 Hours Usage", timedelta(hours=12)),
-        AverageBatteryUsageSensor(hass, "Last 24 Hours Usage", timedelta(hours=24)),
-        AverageBatteryUsageSensor(hass, "Last 7 Days Usage", timedelta(days=7)),
+    # Create sensors for average usage
+    average_usage_sensors = [
+        AverageBatteryUsageSensor(hass, "Last Hour Usage", timedelta(hours=1), "usage"),
+        AverageBatteryUsageSensor(
+            hass, "Last 12 Hours Usage", timedelta(hours=12), "usage"
+        ),
+        AverageBatteryUsageSensor(
+            hass, "Last 24 Hours Usage", timedelta(hours=24), "usage"
+        ),
+        AverageBatteryUsageSensor(
+            hass, "Last 7 Days Usage", timedelta(days=7), "usage"
+        ),
     ]
+
+    # Create sensors for average charge
+    average_charge_sensors = [
+        AverageBatteryUsageSensor(
+            hass, "Last Hour Charge", timedelta(hours=1), "charge"
+        ),
+        AverageBatteryUsageSensor(
+            hass, "Last 12 Hours Charge", timedelta(hours=12), "charge"
+        ),
+        AverageBatteryUsageSensor(
+            hass, "Last 24 Hours Charge", timedelta(hours=24), "charge"
+        ),
+        AverageBatteryUsageSensor(
+            hass, "Last 7 Days Charge", timedelta(days=7), "charge"
+        ),
+    ]
+
+    prediction_sensor_entities = [
+        BatteryPredictionSensor(hass, "1 Hour Battery Prediction", timedelta(hours=1)),
+        BatteryPredictionSensor(hass, "6 Hours Battery Prediction", timedelta(hours=6)),
+    ]
+
+    peak_hour_sensors = [
+        PeakHours(hass, "Peak Hours Prediction", timedelta(minutes=30), "peak_hours"),
+    ]
+
     hass.data[DOMAIN]["sensors"] = sensors
     hass.data[DOMAIN]["update_charge_plan"] = lambda: update_charge_plan(hass)
-    hass.data[DOMAIN]["average_battery_usage_sensors"] = average_sensors
+    hass.data[DOMAIN]["average_use_sensors"] = average_usage_sensors
+    hass.data[DOMAIN]["average_charge_sensors"] = average_charge_sensors
+    hass.data[DOMAIN]["peak_hour_sensors"] = peak_hour_sensors
+    hass.data[DOMAIN]["battery_prediction_sensors"] = prediction_sensor_entities
 
-    all_sensors = average_sensors + sensors
+
+    all_sensors = (
+        sensors
+        + prediction_sensor_entities
+        + peak_hour_sensors
+        + average_usage_sensors
+        + average_charge_sensors
+    )
     async_add_entities(all_sensors, True)
 
     hass.data[DOMAIN]["charging_status_sensor"] = next(

@@ -1,8 +1,6 @@
 import logging
 from homeassistant.helpers.entity import Entity
-from .const import (
-    DOMAIN,
-)
+from .const import DOMAIN
 from homeassistant.helpers.event import async_track_time_interval
 from datetime import timedelta, datetime, time
 import asyncio
@@ -49,16 +47,23 @@ def create_afternoon_charge_plan(afternoon_today, num_slots, charge_rate_kwh):
         # Select the cheapest slots
         cheapest_slots = sorted_afternoon_rates[:num_slots]
         if not cheapest_slots:
-            _LOGGER.warning("No afternoon slots available")
+            _LOGGER.warning("No Afternoon slots available")
+            return 0, 0.0, []  # Return empty values
 
-        # Extract and sort slot times
+        # Extract slot times and filter out the ones that have already passed
         slot_times = [slot["Start Time"] for slot in cheapest_slots]
-        if (
-            slot_times
-            and datetime.strptime(slot_times[-1], "%H:%M:%S").time() < current_time
-        ):
-            _LOGGER.warning("All selected afternoon slots have already passed.")
-            return 0, 0.0, []  # Return empty values or handle as needed
+        slot_times = [
+            slot
+            for slot in slot_times
+            if datetime.strptime(slot, "%H:%M:%S").time() >= current_time
+        ]
+
+        # Check if there are any slot times left after filtering
+        if not slot_times:
+            _LOGGER.warning("All selected Afternoon slots have already passed.")
+            return 0, 0.0, []  # Return empty values
+
+        # Sort the remaining slot times
         slot_times.sort(key=lambda x: datetime.strptime(x, "%H:%M:%S").time())
 
         # Calculate total cost
@@ -67,12 +72,14 @@ def create_afternoon_charge_plan(afternoon_today, num_slots, charge_rate_kwh):
         )
 
     except Exception as e:
-        _LOGGER.error(f"Error in creating afternoon charge plan: {e}")
-        raise
+        _LOGGER.error(f"Error in creating Afternoon charge plan: {e}")
+        return 0, 0.0, []  # Return empty values in case of an error
 
+    # Return the number of slots, total cost, and slot times
     return num_slots, total_cost, slot_times
 
 
+#### evening plan #####
 def create_evening_charge_plan(evening_today, num_slots, charge_rate_kwh):
     try:
         current_time = datetime.now().time()
@@ -96,19 +103,23 @@ def create_evening_charge_plan(evening_today, num_slots, charge_rate_kwh):
         cheapest_slots = sorted_evening_rates[:num_slots]
         if not cheapest_slots:
             _LOGGER.warning("No evening slots available")
+            return 0, 0.0, []  # Return empty values
 
-        # Extract and sort slot times
+        # Extract slot times and filter out the ones that have already passed
         slot_times = [slot["Start Time"] for slot in cheapest_slots]
+        slot_times = [
+            slot
+            for slot in slot_times
+            if datetime.strptime(slot, "%H:%M:%S").time() >= current_time
+        ]
 
-        if (
-            slot_times
-            and datetime.strptime(slot_times[-1], "%H:%M:%S").time() < current_time
-        ):
-            _LOGGER.warning("All selected afternoon slots have already passed.")
-            return 0, 0.0, []  # Return empty values or handle as needed
-        _LOGGER.info(f"Extracted slot times before sorting: {slot_times}")
+        # Check if there are any slot times left after filtering
+        if not slot_times:
+            _LOGGER.warning("All selected evening slots have already passed.")
+            return 0, 0.0, []  # Return empty values
+
+        # Sort the remaining slot times
         slot_times.sort(key=lambda x: datetime.strptime(x, "%H:%M:%S").time())
-        _LOGGER.info(f"Extracted slot times after sorting: {slot_times}")
 
         # Calculate total cost
         total_cost = sum(
@@ -116,11 +127,14 @@ def create_evening_charge_plan(evening_today, num_slots, charge_rate_kwh):
         )
 
     except Exception as e:
-        raise Exception(f"Error in creating evening charge plan: {e}")
+        _LOGGER.error(f"Error in creating evening charge plan: {e}")
+        return 0, 0.0, []  # Return empty values in case of an error
 
+    # Return the number of slots, total cost, and slot times
     return num_slots, total_cost, slot_times
 
 
+### night plan ###
 def create_night_charge_plan(rates_from_midnight, num_slots, charge_rate_kwh):
     try:
         current_time = datetime.now().time()
@@ -145,34 +159,35 @@ def create_night_charge_plan(rates_from_midnight, num_slots, charge_rate_kwh):
         # Select the cheapest slots
         cheapest_slots = sorted_night_rates[:num_slots]
         if not cheapest_slots:
-            _LOGGER.warning("No night slots available")
+            _LOGGER.warning("No Nighttime slots available")
+            return 0, 0.0, []  # Return empty values
 
-        # Extract and sort slot times
+        # Extract slot times and filter out the ones that have already passed
         slot_times = [slot["Start Time"] for slot in cheapest_slots]
-        if (
-            slot_times
-            and datetime.strptime(slot_times[-1], "%H:%M:%S").time() < current_time
-        ):
-            _LOGGER.info(f"Extracted slot times before sorting: {slot_times}")
-            _LOGGER.warning("All selected afternoon slots have already passed.")
-            return 0, 0.0, []  # Return empty values or handle as needed
+        slot_times = [
+            slot
+            for slot in slot_times
+            if datetime.strptime(slot, "%H:%M:%S").time() >= current_time
+        ]
 
-                # After extracting slot times
+        # Check if there are any slot times left after filtering
+        if not slot_times:
+            _LOGGER.warning("All selected Nighttime slots have already passed.")
+            return 0, 0.0, []  # Return empty values
 
+        # Sort the remaining slot times
         slot_times.sort(key=lambda x: datetime.strptime(x, "%H:%M:%S").time())
-        _LOGGER.info(f"Slot times after sorting: {slot_times}")
-
-
-        # After sorting slot times
 
         # Calculate total cost
         total_cost = sum(
-            slot["cost"] * (charge_rate_kwh / 2) for slot in cheapest_slots
+            slot["Cost"] * (charge_rate_kwh / 2) for slot in cheapest_slots
         )
 
     except Exception as e:
-        raise Exception(f"Error in creating night charge plan: {e}")
+        _LOGGER.error(f"Error in creating Nighttime charge plan: {e}")
+        return 0, 0.0, []  # Return empty values in case of an error
 
+    # Return the number of slots, total cost, and slot times
     return num_slots, total_cost, slot_times
 
 
@@ -182,7 +197,7 @@ def get_current_time_period():
     # Example:
     afternoon_start, afternoon_end = time(12, 0), time(16, 0)
     evening_start, evening_end = time(17, 50), time(23, 59)
-    night_start, night_end = time(0, 0), time(8, 0)
+    night_start, night_end = time(23, 25), time(8, 0)
 
     if afternoon_start <= now.time() < afternoon_end:
         _LOGGER.info("Current time period is afternoon.")
@@ -233,10 +248,12 @@ def create_charge_plan(
                 rates_from_midnight, num_slots, charge_rate_kwh
             )
         else:
-            _LOGGER.info("Outside of any predefined charge plan period. Waiting for next period.")
+            _LOGGER.info(
+                "Outside of any predefined charge plan period. Waiting for next period."
+            )
             slot_times = 0
             num_slots = 0
-            total_cost= []
+            total_cost = []
 
     except Exception as e:
         raise Exception(f"Error in creating charge plan: {e}")

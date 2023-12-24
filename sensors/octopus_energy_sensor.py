@@ -8,6 +8,8 @@ from ..const import (
 from datetime import datetime, timedelta
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.const import TIME_DAYS
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,6 +32,11 @@ class OctopusEnergySensor(Entity):
     def state(self):
         """Return the state of the sensor."""
         return self._state
+
+    @property
+    def unit_of_measurement(self):
+        """return unit of measuremnt"""
+        return TIME_DAYS
 
     @property
     def extra_state_attributes(self):

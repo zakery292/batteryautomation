@@ -82,8 +82,8 @@ class BatteryAutomationConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required("api_key", default=""): str,
-                    vol.Required("account_id", default=""): str,
+                    vol.Optional("api_key", default=""): str,
+                    vol.Optional("account_id", default=""): str,
                     vol.Optional("battery_charge_rate", default=""): int,
                     vol.Optional("battery_charge"): vol.In(battery_charge),
                     vol.Optional("battery_capacity"): vol.In(battery_capacity),

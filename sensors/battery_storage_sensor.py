@@ -4,7 +4,8 @@ from ..const import (
     DOMAIN,
     unique_id_battery_sensor,
 )
-from datetime import timedelta, datetime, time
+from homeassistant.const import ENERGY_KILO_WATT_HOUR, DEVICE_CLASS_BATTERY
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,6 +25,16 @@ class BatteryStorageSensors(Entity):
     def state(self):
         """Return the state of the sensor."""
         return self._state
+
+    @property
+    def device_class(self):
+        """Return the class of this sensor."""
+        return DEVICE_CLASS_BATTERY
+
+    @property
+    def unit_of_measurement(self):
+        """Return the unit of measurement."""
+        return ENERGY_KILO_WATT_HOUR
 
     @property
     def unique_id(self):

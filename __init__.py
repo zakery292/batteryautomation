@@ -9,7 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.helpers.event import async_track_time_interval
-from .const import DOMAIN, set_api_key_and_account
+from .const import DOMAIN, set_api_key_and_account, unique_id_lookback
 from .octopus_api import get_octopus_energy_rates
 from .get_tariff import get_tariff
 from .charging_control import ChargingControl
@@ -123,6 +123,61 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             if not isinstance(sensor, ChargingStatusSensor):
                 await sensor.async_update()
 
+    ### battery predictions ###
+    async def update_prediction_sensors(now):
+        prediction_sensors = hass.data[DOMAIN].get("prediction_sensors", [])
+        for sensor in prediction_sensors:
+            await sensor.async_update()
+
+    async_track_time_interval(hass, update_prediction_sensors, timedelta(minutes=2))
+
+    ####
+    ####
+    async def update_battery_use_sensors(now):
+        sensors = hass.data[DOMAIN].get("average_use_sensors", [])
+        for sensor in sensors:
+            await sensor.async_update()
+
+    async_track_time_interval(hass, update_battery_use_sensors, timedelta(minutes=2))
+
+    async def update_battery_charging_sensors(now):
+        sensors = hass.data[DOMAIN].get("average_charge_sensors", [])
+        for sensor in sensors:
+            await sensor.async_update()
+
+    async_track_time_interval(
+        hass, update_battery_charging_sensors, timedelta(minutes=2)
+    )
+
+    async def update_battery_prediction_sensors(now):
+        sensors = hass.data[DOMAIN].get("battery_prediction_sensors", [])
+        for sensor in sensors:
+            await sensor.async_update()
+
+    async_track_time_interval(
+        hass, update_battery_prediction_sensors, timedelta(minutes=5)
+    )
+
+    async def update_peak_hour_sensors(now):
+        sensors = hass.data[DOMAIN].get("peak_hour_sensors", [])
+        for sensor in sensors:
+            await sensor.async_update()
+
+    async_track_time_interval(hass, update_peak_hour_sensors, timedelta(minutes=5))
+    #######
+
+    async def handle_lookback_change(event):
+        """Handle changes to the lookback number entity."""
+        new_lookback_period = event.data.get("value")
+        hass.data[DOMAIN]["lookback_period"] = new_lookback_period
+
+        # Update the PeakHours sensor
+        peak_hours_sensor = hass.data[DOMAIN].get("peak_hours_sensor")
+        if peak_hours_sensor:
+            await peak_hours_sensor.async_update()
+
+    hass.bus.async_listen("lookback_period_changed", handle_lookback_change)
+
     # Store states in global variables for sensor access
     battery_charge_state = float(hass.states.get(battery_charge_entity_id).state)
     battery_capacity_ah = float(hass.states.get(battery_capacity_entity_id).state)
@@ -193,6 +248,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                 await asyncio.sleep(60 * 5)  # Retry after 5 minutes
 
     hass.loop.create_task(periodic_rate_update(api_key, account_id, hass))
+
     update_charge_plan = hass.data[DOMAIN]["update_charge_plan"]
 
     # Event listener for battery charge state and custom_soc_percentage changes
