@@ -36,6 +36,7 @@ class PeakHours(Entity):
     def unit_of_measurement(self):
         """Return the unit of measurement."""
         return PERCENTAGE
+
     @property
     def state(self):
         return self._state
@@ -48,6 +49,7 @@ class PeakHours(Entity):
             "name": "Battery Storage Automation",
             "manufacturer": "Zakery292",
         }
+
     @property
     def should_poll(self):
         """Return the polling state."""
@@ -60,11 +62,11 @@ class PeakHours(Entity):
 
     async def async_update(self):
         try:
-            #retrieve dynamic lookback period
+            # retrieve dynamic lookback period
             # Only fetch and process predictions, don't update lookback period here
             lookback_days = self._hass.data[DOMAIN].get("lookback_period", 1)
-            _LOGGER.info(f'Loopback update: {lookback_days}')
-            lookback_days = timedelta(hours=12)
+            _LOGGER.info(f"Loopback update: {lookback_days}")
+            lookback_days = timedelta(lookback_days)
 
             # Fetch and store predictions
             self._peak_hours_predictions = await self._hass.async_add_executor_job(
@@ -87,9 +89,10 @@ class PeakHours(Entity):
                 if current_time.time() <= peak_hour_time and prediction is not None:
                     nearest_prediction_time = peak_hour
                     nearest_prediction_value = prediction
-                    _LOGGER.info(f"Peak updated prediction Value: {nearest_prediction_value}")
+                    _LOGGER.info(
+                        f"Peak updated prediction Value: {nearest_prediction_value}"
+                    )
                     break
-
 
             # Update the state with the nearest prediction and time
             if nearest_prediction_time and nearest_prediction_value is not None:
@@ -99,4 +102,3 @@ class PeakHours(Entity):
         except Exception as e:
             _LOGGER.error(f"Error updating sensor: {e}")
             self._state = "Error"
-
