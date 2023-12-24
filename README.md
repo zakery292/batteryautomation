@@ -1,4 +1,4 @@
-# Version 1.3.0 Working and tested
+# Version 1.5.0 Working in a docker Dev enviroment and personal machine rasberry pi 2gb, there is a dependcy to use numpy so make sure you update or isntall this otherwise the predictors wont work.
 ## Battery Automation for inverters of all makes and models that already intergrate into home assistant and have remote control Confimred working with LUXpower tek with GuyBW's lux integration 
 
 ### Fuctions to inlcude the following:  
@@ -11,10 +11,10 @@
 - Rates left till next update  
 - Inverter integration providing you have a number of existing sensors  
 - Battery Ah to current kWh capacticty this is based on what your inverter get from the BMS
-- Battery Charge plan now has three modes which are automaticaly set if you leave the switch turned on Afternoon charging (will pick the best rates deafults to 100%, evening rates between 19:00 & 23:59 deafults to 100% and after midnight) for the short term until version 1.4 comes out i suggest automating the time to turn on the charging switch.
-- There are 4 new sensors, these sensors are collalating data from the SOC percentage drop over periods of time and storing them in a SQL database, this data is there to serve two purposes, one to give us a insight into periods of high usage of the battery and react from previous data so the integration can best guess when and how much to charge this is a important step into full autonomy within the integration
-- bug fixes and other fun stuff. 
-
+- Battery Charge plan now has three modes which are automaticaly set if you leave the switch turned on Afternoon charging (will pick the best rates deafults to 100%, evening rates between 19:00 & 23:59 deafults to 100% and after midnight) for the short term until version 1.8 comes out i suggest automating the time to turn on the charging switch.
+- 8 new sensors for battery usage averaging not sure they will stay
+- 3 battery prediction sensors, one of which will predict usage between 16:00 and 19:00 and 22:00 this uses the data held in the database, for people with less battieres that cant make it through the day is to automate a afternoon top up if its going to be cheaper or use the grid depending...
+- removed dependency on using octopus but obviously half the sensors wont do anything if you dont use it. 
   
 
 ### How to setup:
