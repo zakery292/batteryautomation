@@ -19,6 +19,8 @@ class ChargingControlSwitchEntity(SwitchEntity):
         self._name = name
         self._state = False
         self._update_callback = update_callback
+        object_id = f"charge_control_switch{self._name.lower().replace(' ', '_')}"
+        self.entity_id = f"sensor.{object_id}"
 
     @property
     def name(self):

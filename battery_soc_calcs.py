@@ -90,3 +90,36 @@ def calculate_average_change(hass: HomeAssistant, period: timedelta):
     average_increase = min(average_increase, 100)
 
     return average_increase, average_decrease
+
+
+def calculate_total_percentage_change(hass: HomeAssistant, period: timedelta, battery_capacity_kwh):
+    end_time = datetime.now()
+    start_time = end_time - period
+    soc_data = get_soc_data(hass, start_time, end_time)
+
+    if len(soc_data) < 2:
+        _LOGGER.warning("Not enough data to calculate change")
+        return None, None
+
+    total_increase_kwh = 0
+    total_decrease_kwh = 0
+
+    for i in range(1, len(soc_data)):
+        change_percentage = soc_data[i][1] - soc_data[i - 1][1]
+        change_kwh = (change_percentage / 100) * battery_capacity_kwh  # Convert percentage change to kWh
+
+        if change_percentage > 0:
+            total_increase_kwh += change_kwh
+        elif change_percentage < 0:
+            total_decrease_kwh += abs(change_kwh)
+
+    # Convert changes to percentages of the battery's total capacity
+    total_percentage_increase = (total_increase_kwh / battery_capacity_kwh) * 100
+    total_percentage_decrease = (total_decrease_kwh / battery_capacity_kwh) * 100
+
+    # Round to 2 decimal places
+    total_percentage_increase = round(total_percentage_increase, 2)
+    total_percentage_decrease = round(total_percentage_decrease, 2)
+
+    return total_percentage_increase, total_percentage_decrease
+

@@ -87,29 +87,29 @@ async def async_setup_entry(hass, entry, async_add_entities):
     average_usage_sensors = [
         AverageBatteryUsageSensor(hass, "Last Hour Usage", timedelta(hours=1), "usage"),
         AverageBatteryUsageSensor(
-            hass, "Last 12 Hours Usage", timedelta(hours=12), "usage"
+            hass, "Total Usage Last 12 Hours Usage", timedelta(hours=12), "total"
         ),
         AverageBatteryUsageSensor(
-            hass, "Last 24 Hours Usage", timedelta(hours=24), "usage"
+            hass, "Total Usage Last 24 Hours Usage", timedelta(hours=24), "total"
         ),
         AverageBatteryUsageSensor(
-            hass, "Last 7 Days Usage", timedelta(days=7), "usage"
+            hass, "Total Usage Last 7 Days Usage", timedelta(days=7), "total"
         ),
     ]
 
     # Create sensors for average charge
     average_charge_sensors = [
         AverageBatteryUsageSensor(
-            hass, "Last Hour Charge", timedelta(hours=1), "charge"
+            hass, "Total charge Last Hour Charge", timedelta(hours=1), "charge"
         ),
         AverageBatteryUsageSensor(
-            hass, "Last 12 Hours Charge", timedelta(hours=12), "charge"
+            hass, "Total charge Last 12 Hours Charge", timedelta(hours=12), "total"
         ),
         AverageBatteryUsageSensor(
-            hass, "Last 24 Hours Charge", timedelta(hours=24), "charge"
+            hass, "Total charge Last 24 Hours Charge", timedelta(hours=24), "total"
         ),
         AverageBatteryUsageSensor(
-            hass, "Last 7 Days Charge", timedelta(days=7), "charge"
+            hass, "Total charge Last 7 Days Charge", timedelta(days=7), "total"
         ),
     ]
 

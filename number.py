@@ -16,6 +16,8 @@ class CustomSocPercentage(NumberEntity):
         self._hass = hass
         self._name = name
         self._state = hass.data[DOMAIN].get("custom_soc_percentage")
+        object_id = f"custom_soc_percentage{self._name.lower().replace(' ', '_')}"
+        self.entity_id = f"sensor.{object_id}"
 
     @property
     def name(self):
@@ -96,6 +98,8 @@ class LookbackNumberEntity(NumberEntity):
         self._attr_unique_id = unique_id_lookback
         self._attr_value = 1
         self._attr_mode = NumberMode.BOX
+        object_id = f"lookback_entry{self._name.lower().replace(' ', '_')}"
+        self.entity_id = f"sensor.{object_id}"
 
     @property
     def name(self):
