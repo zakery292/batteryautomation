@@ -12,7 +12,8 @@ class BatteryPredictionSensor(Entity):
         self._name = name
         self._state = None
         self._prediction_horizon = prediction_horizon
-        self.entity_id = f"{unique_id_battery_predicitons}_{self._name}"
+        object_id = f"battery_prediction_sensor{self._name.lower().replace(' ', '_')}"
+        self.entity_id = f"sensor.{object_id}"
 
     @property
     def name(self):

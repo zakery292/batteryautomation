@@ -15,6 +15,8 @@ class BatteryStorageSensors(Entity):
         self._name = name
         self._sensor_type = sensor_type
         self._state = None
+        object_id = f"battery_storage_sensor{self._name.lower().replace(' ', '_')}"
+        self.entity_id = f"sensor.{object_id}"
 
     @property
     def name(self):

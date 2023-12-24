@@ -22,6 +22,8 @@ class OctopusEnergySensor(Entity):
         self._attributes = {}
         self._api_key, self._account_id = get_api_key_and_account()
         self._last_sensor_update = None
+        object_id = f"octopus_sensor{self._name.lower().replace(' ', '_')}"
+        self.entity_id = f"sensor.{object_id}"
 
     @property
     def name(self):

@@ -16,7 +16,10 @@ class PeakHours(Entity):
         self._state = None
         self._period = period
         self._peak_hours_predictions = None
-        self.entity_id = f"{unique_id_peak_hours}_{self._name}"
+        object_id = f"peak_hours_{self._name.lower().replace(' ', '_')}"
+        self.entity_id = f"sensor.{object_id}"
+        self._attr_unique_id = (DOMAIN, self._name, unique_id_peak_hours)
+        self._attr_name = unique_id_peak_hours, self._name
 
     @property
     def name(self):

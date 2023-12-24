@@ -17,6 +17,10 @@ class AverageBatteryUsageSensor(Entity):
         self._period = period
         self._mode = mode
         self._peak_hours_predictions = None
+        object_id = (
+            f"average_battery_useage_sensor{self._name.lower().replace(' ', '_')}"
+        )
+        self.entity_id = f"sensor.{object_id}"
 
     @property
     def name(self):
@@ -58,6 +62,7 @@ class AverageBatteryUsageSensor(Entity):
         if self._mode == "peak_hours":
             return {"peak_hours_predictions": self._peak_hours_predictions}
         return {}
+
     async def async_update(self):
         try:
             average_charge, average_usage = await self._hass.async_add_executor_job(

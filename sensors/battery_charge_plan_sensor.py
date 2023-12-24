@@ -21,6 +21,8 @@ class BatteryChargePlanSensor(Entity):
         self._state = None
         self._attributes = {}
         self._last_soc = None
+        object_id = f"battery_charge_plan_sensor{self._name.lower().replace(' ', '_')}"
+        self.entity_id = f"sensor.{object_id}"
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
@@ -117,7 +119,7 @@ class BatteryChargePlanSensor(Entity):
                 self._attributes = {
                     "required_slots": num_slots,
                     "slot_times": slot_times,
-            }
+                }
             else:
                 self._state = "Calculated"
                 self._attributes = {
@@ -130,10 +132,11 @@ class BatteryChargePlanSensor(Entity):
             if self.hass.data[DOMAIN].get("slot_times") != slot_times:
                 self.hass.data[DOMAIN]["slot_times"] = slot_times
                 self.hass.bus.async_fire(
-                    "custom_charge_plan_updated_event",
-                    {"new_slot_times": slot_times}
+                    "custom_charge_plan_updated_event", {"new_slot_times": slot_times}
                 )
-                _LOGGER.info("Fired custom_charge_plan_updated_event with new slot times")
+                _LOGGER.info(
+                    "Fired custom_charge_plan_updated_event with new slot times"
+                )
 
             # Update Home Assistant state
             self.async_write_ha_state()
@@ -141,7 +144,6 @@ class BatteryChargePlanSensor(Entity):
         except Exception as e:
             _LOGGER.error(f"Error in BatteryChargePlanSensor update: {e}")
             self._state = "Error"
-
 
     def time_reached_or_control_off(self):
         # Implementation for time_reached_or_control_off method
