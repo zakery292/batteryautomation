@@ -12,6 +12,7 @@ class BatteryPredictionSensor(Entity):
         self._name = name
         self._state = None
         self._prediction_horizon = prediction_horizon
+        self.entity_id = f"{unique_id_battery_predicitons}_{self._name}"
 
     @property
     def name(self):
@@ -45,4 +46,5 @@ class BatteryPredictionSensor(Entity):
         self._state = await self._hass.async_add_executor_job(
             predict_future_state, self._hass, self._prediction_horizon, lookback_period
         )
+        self.async_schedule_update_ha_state()
         _LOGGER.info(f'Battery Predicitons 1/6 updated')

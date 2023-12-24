@@ -16,6 +16,7 @@ class PeakHours(Entity):
         self._state = None
         self._period = period
         self._peak_hours_predictions = None
+        self.entity_id = f"{unique_id_peak_hours}_{self._name}"
 
     @property
     def name(self):
@@ -66,7 +67,7 @@ class PeakHours(Entity):
             # Only fetch and process predictions, don't update lookback period here
             lookback_days = self._hass.data[DOMAIN].get("lookback_period", 1)
             _LOGGER.info(f"Loopback update: {lookback_days}")
-            lookback_days = timedelta(lookback_days)
+            lookback_days = timedelta(hours=10)
 
             # Fetch and store predictions
             self._peak_hours_predictions = await self._hass.async_add_executor_job(
@@ -97,8 +98,10 @@ class PeakHours(Entity):
             # Update the state with the nearest prediction and time
             if nearest_prediction_time and nearest_prediction_value is not None:
                 self._state = f"{nearest_prediction_value}"
+                self.async_schedule_update_ha_state()
             else:
                 self._state = "No prediction available"
         except Exception as e:
             _LOGGER.error(f"Error updating sensor: {e}")
             self._state = "Error"
+            self.async_schedule_update_ha_state()
